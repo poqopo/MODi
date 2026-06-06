@@ -1,0 +1,12 @@
+[package]
+name = "modi"
+edition = "2024.beta"
+
+[dependencies]
+
+[addresses]
+modi = "0x0"
+
+[dev-dependencies]
+
+[dev-addresses]
