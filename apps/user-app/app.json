@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "MODi User App",
+    "slug": "modi-user-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "modi-user-app",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.modi.userapp"
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./public/favicon.png"
+    }
+  }
+}

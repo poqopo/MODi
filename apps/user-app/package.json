@@ -1,0 +1,30 @@
+{
+  "name": "user-app",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo": "^56.0.9",
+    "expo-status-bar": "^56.0.4",
+    "lucide-react-native": "^1.17.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "^0.21.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.3",
+    "@expo/cli": "^56.1.14",
+    "@types/react": "^19.2.14",
+    "typescript": "~6.0.2"
+  }
+}
