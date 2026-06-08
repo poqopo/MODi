@@ -14,7 +14,15 @@
   "properties": {
     "purpose": {
       "type": "string",
-      "enum": ["diabetes_research", "hypertension_research", "wearable_behavior_research"]
+      "enum": [
+        "diabetes_research",
+        "hypertension_research",
+        "wearable_behavior_research",
+        "activity_reward_research",
+        "sleep_mindfulness_research",
+        "cardio_vitals_research",
+        "metabolic_marker_research"
+      ]
     },
     "requiredAgeRanges": {
       "type": "array",
@@ -29,12 +37,48 @@
       "minItems": 1,
       "items": {
         "type": "string",
-        "enum": ["diabetes", "hypertension", "obesity", "sleep", "activity"]
+        "enum": [
+          "diabetes",
+          "hypertension",
+          "obesity",
+          "sleep",
+          "activity",
+          "step_count",
+          "distance_walking_running",
+          "exercise_minutes",
+          "active_energy",
+          "stand_time",
+          "vo2_max",
+          "workout_summary",
+          "sleep_analysis",
+          "sleep_duration",
+          "sleep_stage_band",
+          "mindful_minutes",
+          "sleep_consistency",
+          "heart_rate",
+          "resting_heart_rate",
+          "hrv_sdnn",
+          "oxygen_saturation",
+          "blood_pressure",
+          "respiratory_rate",
+          "blood_glucose",
+          "glucose_range",
+          "insulin_delivery",
+          "metabolic_pattern"
+        ]
       }
     },
     "allowedUse": {
       "type": "string",
-      "enum": ["aggregate_analysis", "model_training", "research_report"]
+      "enum": [
+        "aggregate_analysis",
+        "model_training",
+        "research_report",
+        "reward_validation",
+        "personalized_coaching",
+        "remote_monitoring",
+        "aggregate_research"
+      ]
     },
     "retentionDays": {
       "type": "integer",

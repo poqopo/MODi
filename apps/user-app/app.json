@@ -11,7 +11,7 @@
       [
         "@kingstinct/react-native-healthkit",
         {
-          "NSHealthShareUsageDescription": "걸음 수, 수면, 심박 데이터를 앱에서 보여주기 위해 Apple 건강정보를 읽습니다.",
+          "NSHealthShareUsageDescription": "활동, 수면, 마음챙김, 심혈관, 혈당 데이터를 사용자가 동의한 연구 제공 범위로 변환하기 위해 Apple 건강정보를 읽습니다.",
           "NSHealthUpdateUsageDescription": false,
           "background": false
         }

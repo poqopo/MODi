@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modi.local/schemas/wearable_health_record.schema.json",
+  "title": "MODi MVP Wearable Health Record",
+  "description": "Apple Health/HealthKit data transformed into consent-scoped categorical research features. Raw samples, exact timestamps, source streams, and direct identifiers are excluded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ageRange", "deviceType", "recordedMonth", "dataDomains", "featureTags"],
+  "properties": {
+    "ageRange": {
+      "type": "string",
+      "enum": ["20-29", "30-39", "40-49", "50-59", "60-69"]
+    },
+    "deviceType": {
+      "type": "string",
+      "enum": ["wearable", "manual_entry", "lab_summary"]
+    },
+    "recordedMonth": {
+      "type": "string",
+      "pattern": "^20[0-9]{2}-(0[1-9]|1[0-2])$"
+    },
+    "dataDomains": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["activity_workout", "sleep_mindfulness", "cardio_vitals", "metabolic"]
+      }
+    },
+    "featureTags": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "step_count",
+          "distance_walking_running",
+          "exercise_minutes",
+          "active_energy",
+          "stand_time",
+          "vo2_max",
+          "workout_summary",
+          "sleep_analysis",
+          "sleep_duration",
+          "sleep_stage_band",
+          "mindful_minutes",
+          "sleep_consistency",
+          "heart_rate",
+          "resting_heart_rate",
+          "hrv_sdnn",
+          "oxygen_saturation",
+          "blood_pressure",
+          "respiratory_rate",
+          "blood_glucose",
+          "glucose_range",
+          "insulin_delivery",
+          "metabolic_pattern"
+        ]
+      }
+    },
+    "activityBand": {
+      "type": "string",
+      "enum": ["low", "moderate", "high", "very_high"]
+    },
+    "distanceBand": {
+      "type": "string",
+      "enum": ["under_2km", "2km-5km", "5km-10km", "10km-plus"]
+    },
+    "exerciseMinutesBand": {
+      "type": "string",
+      "enum": ["0-10m", "10-30m", "30-60m", "60m-plus"]
+    },
+    "activeEnergyBand": {
+      "type": "string",
+      "enum": ["low", "moderate", "high"]
+    },
+    "standTimeBand": {
+      "type": "string",
+      "enum": ["low", "moderate", "high"]
+    },
+    "vo2MaxBand": {
+      "type": "string",
+      "enum": ["low", "fair", "good", "excellent", "not_available"]
+    },
+    "workoutSummaryBand": {
+      "type": "string",
+      "enum": ["none", "light", "moderate", "intense"]
+    },
+    "sleepRecoveryBand": {
+      "type": "string",
+      "enum": ["low", "stable", "high", "irregular"]
+    },
+    "sleepDuration": {
+      "type": "string",
+      "enum": ["under_5h", "5h-6h", "6h-7h", "7h-8h", "8h-plus"]
+    },
+    "sleepStageBand": {
+      "type": "string",
+      "enum": ["fragmented", "light_dominant", "balanced", "deep_dominant", "not_available"]
+    },
+    "mindfulMinutesBand": {
+      "type": "string",
+      "enum": ["none", "under_10m", "10-20m", "20m-plus"]
+    },
+    "cardioVitalBand": {
+      "type": "string",
+      "enum": ["normal", "watch", "elevated", "not_available"]
+    },
+    "restingHrRange": {
+      "type": "string",
+      "enum": ["under_50", "50-59", "60-69", "70-79", "80-plus", "not_available"]
+    },
+    "hrvBand": {
+      "type": "string",
+      "enum": ["low", "moderate", "high", "not_available"]
+    },
+    "oxygenSaturationBand": {
+      "type": "string",
+      "enum": ["under_92", "92-94", "95-100", "not_available"]
+    },
+    "bloodPressureBand": {
+      "type": "string",
+      "enum": ["normal", "elevated", "high", "not_available"]
+    },
+    "respiratoryRateBand": {
+      "type": "string",
+      "enum": ["low", "normal", "high", "not_available"]
+    },
+    "glucoseRange": {
+      "type": "string",
+      "enum": ["normal", "100-125", "126-139", "140-179", "180-plus", "not_available"]
+    },
+    "insulinUseBand": {
+      "type": "string",
+      "enum": ["none", "low", "medium", "high", "not_available"]
+    },
+    "metabolicPatternBand": {
+      "type": "string",
+      "enum": ["stable", "variable", "elevated", "not_available"]
+    }
+  }
+}

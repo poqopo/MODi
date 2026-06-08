@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 211 66% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 211 66% 15%;
+    --primary: 248 97% 62%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 45% 98%;
+    --secondary-foreground: 211 66% 15%;
+    --muted: 210 45% 98%;
+    --muted-foreground: 216 18% 45%;
+    --accent: 39 56% 83%;
+    --accent-foreground: 30 52% 32%;
+    --border: 214 31% 90%;
+    --input: 209 45% 73%;
+    --ring: 248 97% 62%;
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    margin: 0;
+    font-feature-settings:
+      'ss01' 1,
+      'tnum' 0;
+    letter-spacing: 0;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+}
+
+@layer utilities {
+  .mesh-band {
+    background:
+      linear-gradient(90deg, rgba(245, 233, 212, 0.92) 0%, rgba(251, 211, 190, 0.88) 22%, rgba(222, 215, 255, 0.88) 48%, rgba(102, 94, 253, 0.82) 74%, rgba(234, 34, 97, 0.72) 100%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.7) 88%);
+    mask-image: linear-gradient(180deg, #000 0%, #000 70%, transparent 100%);
+  }
+
+  .tabular {
+    font-feature-settings: 'tnum' 1;
+  }
+}

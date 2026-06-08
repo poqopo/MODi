@@ -4,6 +4,9 @@ import type { CategorySampleTyped, ObjectTypeIdentifier } from '@kingstinct/reac
 const appleHealthReadTypes = [
   'HKQuantityTypeIdentifierStepCount',
   'HKQuantityTypeIdentifierHeartRate',
+  'HKQuantityTypeIdentifierHeight',
+  'HKQuantityTypeIdentifierBodyMass',
+  'HKQuantityTypeIdentifierBasalEnergyBurned',
   'HKCategoryTypeIdentifierSleepAnalysis',
 ] satisfies readonly ObjectTypeIdentifier[]
 
@@ -14,12 +17,24 @@ const asleepValues = new Set<number>([
   5,
 ])
 const asleepDeepValue = 4
+const developmentFallbackSnapshot = {
+  bodyMassKg: 68,
+  heartRateBpm: 72,
+  heightCm: 174,
+  restingEnergyKcal: 1420,
+  sleepDeepMinutes: 126,
+  sleepTotalMinutes: 432,
+  steps: 8426,
+}
 
 export type AppleHealthSnapshot = {
+  bodyMassKg?: number
   heartRate?: {
     bpm: number
     measuredAt: Date
   }
+  heightCm?: number
+  restingEnergyKcal?: number
   sleep: {
     deepMinutes: number
     endDate?: Date
@@ -73,12 +88,18 @@ export async function fetchAppleHealthSnapshot(): Promise<AppleHealthResult> {
     const sleepWindowStart = new Date(todayStart)
     sleepWindowStart.setHours(-12, 0, 0, 0)
 
-    const [stepStats, heartRateSample, sleepSamples] = await Promise.all([
+    const [stepStats, heartRateSample, heightSample, bodyMassSample, restingEnergyStats, sleepSamples] = await Promise.all([
       queryStatisticsForQuantity('HKQuantityTypeIdentifierStepCount', ['cumulativeSum'], {
         filter: { date: { endDate: now, startDate: todayStart } },
         unit: 'count',
       }),
       getMostRecentQuantitySample('HKQuantityTypeIdentifierHeartRate', 'count/min'),
+      getMostRecentQuantitySample('HKQuantityTypeIdentifierHeight', 'cm'),
+      getMostRecentQuantitySample('HKQuantityTypeIdentifierBodyMass', 'kg'),
+      queryStatisticsForQuantity('HKQuantityTypeIdentifierBasalEnergyBurned', ['cumulativeSum'], {
+        filter: { date: { endDate: now, startDate: todayStart } },
+        unit: 'kcal',
+      }),
       queryCategorySamples('HKCategoryTypeIdentifierSleepAnalysis', {
         ascending: true,
         filter: { date: { endDate: now, startDate: sleepWindowStart } },
@@ -86,18 +107,23 @@ export async function fetchAppleHealthSnapshot(): Promise<AppleHealthResult> {
       }),
     ])
 
+    const snapshot: AppleHealthSnapshot = {
+      bodyMassKg: roundOptional(bodyMassSample?.quantity, 1),
+      heartRate: heartRateSample
+        ? {
+            bpm: Math.round(heartRateSample.quantity),
+            measuredAt: asDate(heartRateSample.endDate),
+          }
+        : undefined,
+      heightCm: roundOptional(heightSample?.quantity, 1),
+      restingEnergyKcal: Math.max(0, Math.round(restingEnergyStats.sumQuantity?.quantity ?? 0)),
+      sleep: summarizeSleep(sleepSamples),
+      steps: Math.max(0, Math.round(stepStats.sumQuantity?.quantity ?? 0)),
+      syncedAt: now,
+    }
+
     return {
-      snapshot: {
-        heartRate: heartRateSample
-          ? {
-              bpm: Math.round(heartRateSample.quantity),
-              measuredAt: asDate(heartRateSample.endDate),
-            }
-          : undefined,
-        sleep: summarizeSleep(sleepSamples),
-        steps: Math.max(0, Math.round(stepStats.sumQuantity?.quantity ?? 0)),
-        syncedAt: now,
-      },
+      snapshot: applyDevelopmentFallback(snapshot),
       status: 'success',
     }
   } catch (error) {
@@ -144,6 +170,49 @@ function summarizeSleep(samples: readonly CategorySampleTyped<'HKCategoryTypeIde
   }
 }
 
+function applyDevelopmentFallback(snapshot: AppleHealthSnapshot) {
+  if (!isDevelopmentBuild()) return snapshot
+
+  const fallbackSleepStart = new Date(snapshot.syncedAt)
+  fallbackSleepStart.setDate(fallbackSleepStart.getDate() - 1)
+  fallbackSleepStart.setHours(23, 40, 0, 0)
+
+  const fallbackSleepEnd = new Date(snapshot.syncedAt)
+  fallbackSleepEnd.setHours(7, 2, 0, 0)
+
+  return {
+    ...snapshot,
+    bodyMassKg: hasPositiveValue(snapshot.bodyMassKg) ? snapshot.bodyMassKg : developmentFallbackSnapshot.bodyMassKg,
+    heartRate: snapshot.heartRate && snapshot.heartRate.bpm > 0
+      ? snapshot.heartRate
+      : {
+          bpm: developmentFallbackSnapshot.heartRateBpm,
+          measuredAt: snapshot.syncedAt,
+        },
+    heightCm: hasPositiveValue(snapshot.heightCm) ? snapshot.heightCm : developmentFallbackSnapshot.heightCm,
+    restingEnergyKcal: hasPositiveValue(snapshot.restingEnergyKcal)
+      ? snapshot.restingEnergyKcal
+      : developmentFallbackSnapshot.restingEnergyKcal,
+    sleep: snapshot.sleep.totalMinutes > 0
+      ? snapshot.sleep
+      : {
+          deepMinutes: developmentFallbackSnapshot.sleepDeepMinutes,
+          endDate: fallbackSleepEnd,
+          startDate: fallbackSleepStart,
+          totalMinutes: developmentFallbackSnapshot.sleepTotalMinutes,
+        },
+    steps: snapshot.steps > 0 ? snapshot.steps : developmentFallbackSnapshot.steps,
+  }
+}
+
+function isDevelopmentBuild() {
+  return typeof __DEV__ !== 'undefined' && __DEV__
+}
+
+function hasPositiveValue(value: number | undefined) {
+  return value !== undefined && value > 0
+}
+
 function startOfDay(date: Date) {
   const start = new Date(date)
   start.setHours(0, 0, 0, 0)
@@ -152,4 +221,11 @@ function startOfDay(date: Date) {
 
 function asDate(value: Date | string) {
   return value instanceof Date ? value : new Date(value)
+}
+
+function roundOptional(value: number | undefined, digits: number) {
+  if (value === undefined) return undefined
+
+  const scale = 10 ** digits
+  return Math.round(value * scale) / scale
 }

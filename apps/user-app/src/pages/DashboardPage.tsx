@@ -1,4 +1,4 @@
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { useCallback, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import {
   Modal,
   Pressable,
@@ -13,17 +13,18 @@ import {
 } from 'react-native'
 import {
   Activity,
-  AlertTriangle,
+  Bell,
   BrainCircuit,
   Check,
   CheckCircle2,
-  ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Flame,
   Footprints,
   HeartPulse,
   LockKeyhole,
   Moon,
+  Plus,
   RefreshCw,
   Wallet,
   X,
@@ -35,7 +36,7 @@ import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Progress } from '../components/ui/progress'
 import { Separator } from '../components/ui/separator'
-import { agentChecks, connectedHealthApps, participationRecords, researchRequests, sampleFields } from '../data/mvp'
+import { agentChecks, connectedHealthApps, participationRecords, researchRequests } from '../data/mvp'
 import {
   fetchAppleHealthSnapshot,
   getAppleHealthSupportMessage,
@@ -44,7 +45,6 @@ import {
 import { colors, radii, shadow } from '../styles/theme'
 import type { ConnectedHealthApp, DashboardTab, ParticipationRecord, ResearchRequest } from '../types/dashboard'
 
-type LogTone = 'blue' | 'yellow' | 'red'
 type AppleHealthSyncStatus = 'idle' | 'syncing' | 'connected' | 'unsupported' | 'error'
 type HealthCalendarDay = {
   completion?: number
@@ -66,6 +66,13 @@ type HomeMetric = {
   value: string
 }
 type RequestCategoryFilter = 'all' | ResearchRequest['category']
+type NotificationItem = {
+  detail: string
+  id: string
+  time: string
+  title: string
+  unread?: boolean
+}
 
 type DashboardPageProps = {
   activeTab: DashboardTab
@@ -90,41 +97,62 @@ const initialHealthTodos: HealthTodo[] = [
   { id: 'water', label: '물 6잔 마시기', value: '4 / 6잔', done: false },
 ]
 
+const notificationItems: NotificationItem[] = [
+  {
+    detail: 'BetterSleep Coaching 요청이 Agent 검토 단계로 이동했습니다.',
+    id: 'notice-sleep-review',
+    time: '방금',
+    title: '수면 코칭 데이터 검토',
+    unread: true,
+  },
+  {
+    detail: 'Sui Active Insurance 보상 escrow가 확인되었습니다.',
+    id: 'notice-reward-ready',
+    time: '12분 전',
+    title: '보상 조건 확인',
+    unread: true,
+  },
+  {
+    detail: '웨어러블 제공 스키마가 Apple Health 데이터 범위에 맞게 업데이트되었습니다.',
+    id: 'notice-schema',
+    time: '오늘',
+    title: '데이터 정책 업데이트',
+  },
+]
+
 const appleHealthFallbackMetrics: HomeMetric[] = [
-  {
-    detail: '오늘 08:00 동기화',
-    icon: Footprints,
-    label: '걸음 수',
-    progress: 84,
-    unit: '보',
-    value: '8,426',
-  },
-  {
-    detail: '깊은 수면 2.1시간',
-    icon: Moon,
-    label: '수면',
-    progress: 90,
-    unit: '시간',
-    value: '7.2',
-  },
   {
     detail: '안정시 범위',
     icon: HeartPulse,
-    label: '심박',
+    label: '심박수',
     progress: 72,
     unit: 'bpm',
     value: '72',
   },
+  {
+    detail: '오늘 누적',
+    icon: Flame,
+    label: '휴식 에너지',
+    progress: 78,
+    unit: 'kcal',
+    value: '1,420',
+  },
 ]
 
+const homeProfileFallback = {
+  heightCm: 174,
+  name: 'Han',
+  weightKg: 68,
+}
+
 const sleepCycleSegments = [
-  { color: '#bcd7ff', flex: 18, height: 44, label: '얕은 수면', time: '23:40' },
-  { color: '#7ea7f8', flex: 15, height: 64, label: 'REM', time: '00:45' },
-  { color: '#2947a9', flex: 22, height: 82, label: '깊은 수면', time: '01:40' },
-  { color: '#bcd7ff', flex: 18, height: 48, label: '얕은 수면', time: '03:05' },
-  { color: '#7ea7f8', flex: 13, height: 68, label: 'REM', time: '04:20' },
-  { color: '#f5c26f', flex: 6, height: 34, label: '깸', time: '05:18' },
-  { color: '#bcd7ff', flex: 18, height: 46, label: '얕은 수면', time: '05:40' },
+  { color: '#bcd7ff', flex: 18, height: 28, label: '얕은 수면', time: '23:40' },
+  { color: '#7ea7f8', flex: 15, height: 40, label: 'REM', time: '00:45' },
+  { color: '#2947a9', flex: 22, height: 54, label: '깊은 수면', time: '01:40' },
+  { color: '#bcd7ff', flex: 18, height: 30, label: '얕은 수면', time: '03:05' },
+  { color: '#7ea7f8', flex: 13, height: 42, label: 'REM', time: '04:20' },
+  { color: '#f5c26f', flex: 6, height: 22, label: '깸', time: '05:18' },
+  { color: '#bcd7ff', flex: 18, height: 28, label: '얕은 수면', time: '05:40' },
 ]
 
 export function DashboardPage({
@@ -172,20 +200,80 @@ function DashboardShell({
   onTabChange: (tab: DashboardTab) => void
 }) {
   const { width } = useWindowDimensions()
+  const [notificationsVisible, setNotificationsVisible] = useState(false)
   const isWide = width >= 720
+  const showsNotifications = activeTab !== 'home'
 
   return (
     <SafeAreaView style={styles.screen}>
+      {showsNotifications ? (
+        <Pressable
+          accessibilityLabel="알림함 열기"
+          accessibilityRole="button"
+          onPress={() => setNotificationsVisible(true)}
+          style={({ pressed }) => [styles.notificationButton, pressed ? styles.pressed : null]}
+        >
+          <Bell color={colors.text} size={20} strokeWidth={2.25} />
+          {notificationItems.some((item) => item.unread) ? <View style={styles.notificationUnreadDot} /> : null}
+        </Pressable>
+      ) : null}
+
       <ScrollView
         style={styles.pageViewport}
-        contentContainerStyle={[styles.pageScroll, isWide ? styles.pageScrollWide : null]}
+        contentContainerStyle={[styles.pageScroll, activeTab === 'home' ? styles.pageScrollHome : null, isWide ? styles.pageScrollWide : null]}
         showsVerticalScrollIndicator={false}
       >
         {children}
       </ScrollView>
 
       <BottomTabBar activeTab={activeTab} isWide={isWide} onTabChange={onTabChange} />
+      <NotificationInboxModal
+        notifications={notificationItems}
+        visible={showsNotifications && notificationsVisible}
+        onClose={() => setNotificationsVisible(false)}
+      />
     </SafeAreaView>
+  )
+}
+
+function NotificationInboxModal({
+  notifications,
+  onClose,
+  visible,
+}: {
+  notifications: NotificationItem[]
+  onClose: () => void
+  visible: boolean
+}) {
+  return (
+    <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" visible={visible}>
+      <SafeAreaView style={styles.modalScreen}>
+        <View style={styles.modalHeader}>
+          <View style={styles.modalTitleGroup}>
+            <Text style={styles.modalTitle}>알림함</Text>
+            <Text style={styles.itemMeta}>데이터 요청, 동의, 보상 진행 상태</Text>
+          </View>
+          <Pressable accessibilityLabel="닫기" accessibilityRole="button" onPress={onClose} style={styles.iconButton}>
+            <X color={colors.text} size={20} strokeWidth={2.2} />
+          </Pressable>
+        </View>
+
+        <ScrollView contentContainerStyle={styles.notificationList} showsVerticalScrollIndicator={false}>
+          {notifications.map((item) => (
+            <View key={item.id} style={styles.notificationItem}>
+              <View style={[styles.notificationMarker, item.unread ? styles.notificationMarkerUnread : null]} />
+              <View style={styles.notificationCopy}>
+                <View style={styles.notificationTitleRow}>
+                  <Text style={styles.notificationTitle}>{item.title}</Text>
+                  <Text style={styles.notificationTime}>{item.time}</Text>
+                </View>
+                <Text style={styles.notificationDetail}>{item.detail}</Text>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
   )
 }
 
@@ -246,15 +334,16 @@ function BottomTabButton({
 }
 
 function HomePage() {
-  const appleHealthApp = connectedHealthApps.find((app) => app.id === 'apple-health') ?? connectedHealthApps[0]
   const [appleHealthSnapshot, setAppleHealthSnapshot] = useState<AppleHealthSnapshot | null>(null)
   const [healthMessage, setHealthMessage] = useState<string | null>(null)
   const [healthSyncStatus, setHealthSyncStatus] = useState<AppleHealthSyncStatus>('idle')
   const isAppleHealthConnected = appleHealthSnapshot !== null
   const appleHealthMetrics = appleHealthSnapshot ? getAppleHealthMetrics(appleHealthSnapshot) : appleHealthFallbackMetrics
-  const statusLabel = getAppleHealthStatusLabel(healthSyncStatus, isAppleHealthConnected)
+  const healthProfile = getHealthProfile(appleHealthSnapshot)
+  const rewardMetric = getReceivedRewardMetric(participationRecords)
+  const activitySteps = appleHealthSnapshot?.steps ?? 8426
 
-  const handleAppleHealthPress = async () => {
+  const syncAppleHealth = useCallback(async () => {
     setHealthMessage(null)
     setHealthSyncStatus('syncing')
 
@@ -275,20 +364,39 @@ function HomePage() {
 
     setHealthMessage(result.error)
     setHealthSyncStatus('error')
-  }
+  }, [])
+
+  useEffect(() => {
+    void syncAppleHealth()
+  }, [syncAppleHealth])
 
   return (
     <View style={styles.homePage}>
+      <RewardSummaryCard metric={rewardMetric} />
+
       <Card style={[styles.appleHealthCard, isAppleHealthConnected ? styles.appleHealthCardConnected : null]}>
         <CardContent style={styles.appleHealthContent}>
           <View style={styles.appleHealthHeader}>
-            <View style={styles.appleHealthTitleRow}>
-              <View style={styles.appleHealthIcon}>
-                <HeartPulse color={colors.primary} size={22} strokeWidth={2.25} />
+            <View style={styles.profileHeaderRow}>
+              <View style={styles.profileAvatar}>
+                <Text style={styles.profileAvatarText}>{healthProfile.initial}</Text>
               </View>
-              <View style={styles.appleHealthTitleCopy}>
-                <Text style={styles.appleHealthTitle}>Apple 건강정보</Text>
-                <Text style={styles.itemMeta}>
+              <View style={styles.profileCopy}>
+                <View style={styles.profileNameRow}>
+                  <Text numberOfLines={1} style={styles.profileName}>{healthProfile.name}</Text>
+                  <Button
+                    icon={RefreshCw}
+                    disabled={healthSyncStatus === 'syncing'}
+                    label={healthSyncStatus === 'syncing' ? '동기화 중' : '새로고침'}
+                    onPress={syncAppleHealth}
+                    size="sm"
+                    variant="secondary"
+                  />
+                </View>
+                <Text numberOfLines={1} style={styles.profileMeta}>
+                  키 {healthProfile.heightLabel} · 몸무게 {healthProfile.weightLabel}
+                </Text>
+                <Text numberOfLines={1} style={styles.profileStatus}>
                   {getAppleHealthHeaderMessage({
                     healthMessage,
                     isConnected: isAppleHealthConnected,
@@ -298,7 +406,6 @@ function HomePage() {
                 </Text>
               </View>
             </View>
-            <Badge label={statusLabel.label} variant={statusLabel.variant} />
           </View>
 
           <View style={styles.homeMetricGrid}>
@@ -307,36 +414,74 @@ function HomePage() {
             ))}
           </View>
 
-          {!isAppleHealthConnected ? (
-            <View style={styles.appleHealthCenterAction}>
-              <Button
-                disabled={healthSyncStatus === 'syncing'}
-                label={healthSyncStatus === 'syncing' ? '동기화 중' : '연동하기'}
-                onPress={handleAppleHealthPress}
-                trailingIcon={healthSyncStatus === 'syncing' ? undefined : ChevronRight}
-              />
-            </View>
-          ) : null}
-
+          <ActivityGraph steps={activitySteps} syncedAt={appleHealthSnapshot?.syncedAt} />
           <SleepCycleGraph sleep={appleHealthSnapshot?.sleep} />
-
-          <View style={styles.appleHealthActionRow}>
-            <View style={styles.appleHealthDataTypes}>
-              {appleHealthApp.dataTypes.map((type) => (
-                <Badge key={type} label={type} variant="outline" />
-              ))}
-            </View>
-            {isAppleHealthConnected ? (
-              <Button
-                icon={RefreshCw}
-                disabled={healthSyncStatus === 'syncing'}
-                label={healthSyncStatus === 'syncing' ? '동기화 중' : '새로 동기화'}
-                onPress={handleAppleHealthPress}
-              />
-            ) : null}
-          </View>
         </CardContent>
       </Card>
+    </View>
+  )
+}
+
+function RewardSummaryCard({ metric }: { metric: HomeMetric }) {
+  const Icon = metric.icon
+
+  return (
+    <Card>
+      <CardContent style={styles.rewardSummaryContent}>
+        <View style={styles.rewardSummaryIcon}>
+          <Icon color={colors.primary} size={22} strokeWidth={2.25} />
+        </View>
+        <View style={styles.rewardSummaryCopy}>
+          <Text style={styles.metricLabel}>{metric.label}</Text>
+          <Text numberOfLines={1} style={styles.measurementDetail}>{metric.detail}</Text>
+        </View>
+        <View style={styles.rewardSummaryValueRow}>
+          <Text style={styles.rewardSummaryValue}>{metric.value}</Text>
+          <Text style={styles.rewardSummaryUnit}>{metric.unit}</Text>
+        </View>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ActivityGraph({ steps, syncedAt }: { steps: number; syncedAt?: Date }) {
+  const graphValues = createActivityGraphValues(steps)
+  const activityDetail = syncedAt ? `${formatClock(syncedAt)} 동기화` : '오늘 걸음 수'
+
+  return (
+    <View style={styles.sleepCyclePanel}>
+      <View style={styles.sleepCycleHeader}>
+        <View style={styles.sleepSummaryValueBlock}>
+          <Text style={styles.metricLabel}>운동</Text>
+          <View style={styles.sleepSummaryValueRow}>
+            <Text style={styles.sleepSummaryValue}>{steps.toLocaleString('ko-KR')}</Text>
+            <Text style={styles.homeMetricUnit}>보</Text>
+          </View>
+        </View>
+        <View style={styles.sleepSummaryCopy}>
+          <Text numberOfLines={1} style={styles.measurementDetail}>{activityDetail}</Text>
+          <Text numberOfLines={1} style={styles.measurementDetail}>일일 목표 10,000보 기준</Text>
+        </View>
+      </View>
+
+      <View style={styles.sleepCycleTrack}>
+        {graphValues.map((value, index) => (
+          <View key={`${index}-${value}`} style={styles.activityGraphSlot}>
+            <View style={[styles.activityGraphBar, { height: `${Math.max(18, Math.min(100, value))}%` }]} />
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.sleepCycleTimeRow}>
+        {['06', '09', '12', '15', '18', '21', '24'].map((time) => (
+          <Text key={time} style={styles.sleepCycleTime}>{time}</Text>
+        ))}
+      </View>
+
+      <View style={styles.sleepCycleLegend}>
+        <SleepCycleLegend color={colors.primary} label="걸음" />
+        <SleepCycleLegend color="#d8e0e8" label="목표" />
+      </View>
     </View>
   )
 }
@@ -345,16 +490,23 @@ function SleepCycleGraph({ sleep }: { sleep?: AppleHealthSnapshot['sleep'] }) {
   const sleepStart = sleep?.startDate
   const sleepEnd = sleep?.endDate
   const sleepRange = sleep ? (sleepStart && sleepEnd ? `${formatClock(sleepStart)} - ${formatClock(sleepEnd)}` : '수면 데이터 없음') : '23:40 - 07:02'
-  const sleepBadge = sleep ? `수면 ${formatHours(sleep.totalMinutes)}` : '수면 효율 91%'
+  const sleepHours = sleep ? formatHours(sleep.totalMinutes) : '7.2'
+  const sleepDetail = sleep?.deepMinutes ? `깊은 수면 ${formatHours(sleep.deepMinutes)}` : '수면 주기 분석'
 
   return (
     <View style={styles.sleepCyclePanel}>
       <View style={styles.sleepCycleHeader}>
-        <View>
-          <Text style={styles.metricLabel}>수면 주기</Text>
-          <Text style={styles.measurementDetail}>{sleepRange}</Text>
+        <View style={styles.sleepSummaryValueBlock}>
+          <Text style={styles.metricLabel}>수면</Text>
+          <View style={styles.sleepSummaryValueRow}>
+            <Text style={styles.sleepSummaryValue}>{sleepHours}</Text>
+            <Text style={styles.homeMetricUnit}>시간</Text>
+          </View>
         </View>
-        <Badge label={sleepBadge} variant="secondary" />
+        <View style={styles.sleepSummaryCopy}>
+          <Text numberOfLines={1} style={styles.measurementDetail}>{sleepRange}</Text>
+          <Text numberOfLines={1} style={styles.measurementDetail}>{sleepDetail}</Text>
+        </View>
       </View>
 
       <View style={styles.sleepCycleTrack}>
@@ -412,51 +564,57 @@ function HomeMetricCard({
   return (
     <View style={styles.homeMetricCard}>
       <View style={styles.homeMetricHeader}>
-        <View style={styles.metricIcon}>
+        <View style={styles.homeMetricIcon}>
           <Icon color={colors.primary} size={20} strokeWidth={2.25} />
         </View>
-        <Text style={styles.metricLabel}>{metric.label}</Text>
+        <Text numberOfLines={1} style={styles.metricLabel}>{metric.label}</Text>
       </View>
       <View style={styles.homeMetricValueRow}>
         <Text style={styles.homeMetricValue}>{metric.value}</Text>
         <Text style={styles.homeMetricUnit}>{metric.unit}</Text>
       </View>
       <Progress value={metric.progress} />
-      <Text style={styles.measurementDetail}>{metric.detail}</Text>
+      <Text numberOfLines={1} style={styles.measurementDetail}>{metric.detail}</Text>
     </View>
   )
 }
 
 function getAppleHealthMetrics(snapshot: AppleHealthSnapshot): HomeMetric[] {
-  const sleepHours = formatHours(snapshot.sleep.totalMinutes)
   const heartRateValue = snapshot.heartRate ? `${snapshot.heartRate.bpm}` : '--'
+  const restingEnergyValue = snapshot.restingEnergyKcal ? snapshot.restingEnergyKcal.toLocaleString('ko-KR') : '--'
 
   return [
     {
-      detail: `${formatClock(snapshot.syncedAt)} 동기화`,
-      icon: Footprints,
-      label: '걸음 수',
-      progress: clampProgress((snapshot.steps / 10000) * 100),
-      unit: '보',
-      value: snapshot.steps.toLocaleString('ko-KR'),
-    },
-    {
-      detail: snapshot.sleep.deepMinutes > 0 ? `깊은 수면 ${formatHours(snapshot.sleep.deepMinutes)}` : '수면 데이터 없음',
-      icon: Moon,
-      label: '수면',
-      progress: clampProgress((snapshot.sleep.totalMinutes / 480) * 100),
-      unit: '시간',
-      value: sleepHours,
-    },
-    {
       detail: snapshot.heartRate ? `${formatClock(snapshot.heartRate.measuredAt)} 측정` : '최근 측정 없음',
       icon: HeartPulse,
-      label: '심박',
+      label: '심박수',
       progress: clampProgress(snapshot.heartRate?.bpm ?? 0),
       unit: 'bpm',
       value: heartRateValue,
     },
+    {
+      detail: snapshot.restingEnergyKcal ? '오늘 누적' : '데이터 없음',
+      icon: Flame,
+      label: '휴식 에너지',
+      progress: clampProgress(((snapshot.restingEnergyKcal ?? 0) / 1800) * 100),
+      unit: 'kcal',
+      value: restingEnergyValue,
+    },
   ]
+}
+
+function getReceivedRewardMetric(records: ParticipationRecord[]): HomeMetric {
+  const paidRecords = records.filter((record) => getDataProvisionLogs(record).some((entry) => entry.status === '리워드 지급 완료'))
+  const totalReward = paidRecords.reduce((sum, record) => sum + Number(record.rewardValue), 0)
+
+  return {
+    detail: `지급 완료 ${paidRecords.length}건`,
+    icon: Wallet,
+    label: '받은 리워드',
+    progress: clampProgress((totalReward / 30) * 100),
+    unit: 'SUI',
+    value: formatCompactNumber(totalReward),
+  }
 }
 
 function getAppleHealthHeaderMessage({
@@ -473,15 +631,33 @@ function getAppleHealthHeaderMessage({
   if (status === 'syncing') return 'Apple 건강정보 권한과 데이터를 확인하는 중입니다.'
   if (healthMessage) return healthMessage
   if (isConnected && snapshot) return `${formatClock(snapshot.syncedAt)} 동기화`
-  return '걸음 수, 수면, 심박 데이터를 가져옵니다.'
+  return '운동, 수면, 심박수, 휴식 에너지를 가져옵니다.'
 }
 
-function getAppleHealthStatusLabel(status: AppleHealthSyncStatus, isConnected: boolean) {
-  if (status === 'syncing') return { label: '동기화 중', variant: 'warning' as const }
-  if (status === 'error') return { label: '오류', variant: 'warning' as const }
-  if (status === 'unsupported') return { label: '확인 필요', variant: 'warning' as const }
-  if (isConnected) return { label: '연동됨', variant: 'success' as const }
-  return { label: '미연동', variant: 'secondary' as const }
+function getHealthProfile(snapshot: AppleHealthSnapshot | null) {
+  const heightCm = snapshot?.heightCm ?? homeProfileFallback.heightCm
+  const weightKg = snapshot?.bodyMassKg ?? homeProfileFallback.weightKg
+
+  return {
+    heightLabel: `${formatCompactNumber(heightCm)}cm`,
+    initial: homeProfileFallback.name.slice(0, 1).toUpperCase(),
+    name: homeProfileFallback.name,
+    weightLabel: `${formatCompactNumber(weightKg)}kg`,
+  }
+}
+
+function createActivityGraphValues(steps: number) {
+  const progress = clampProgress((steps / 10000) * 100)
+
+  return [
+    Math.max(16, Math.round(progress * 0.28)),
+    Math.max(18, Math.round(progress * 0.46)),
+    Math.max(18, Math.round(progress * 0.38)),
+    Math.max(22, Math.round(progress * 0.68)),
+    Math.max(20, Math.round(progress * 0.54)),
+    Math.max(26, Math.round(progress * 0.9)),
+    Math.max(30, progress),
+  ]
 }
 
 function clampProgress(value: number) {
@@ -496,6 +672,10 @@ function formatClock(date: Date) {
   const hours = `${date.getHours()}`.padStart(2, '0')
   const minutes = `${date.getMinutes()}`.padStart(2, '0')
   return `${hours}:${minutes}`
+}
+
+function formatCompactNumber(value: number) {
+  return Number.isInteger(value) ? `${value}` : value.toFixed(1)
 }
 
 function HealthPage({
@@ -912,20 +1092,18 @@ function ProjectsPage({
 
   return (
     <View style={styles.section}>
-      <View style={styles.filterPanel}>
-        <FilterGroup label="주제">
-          {categoryFilters.map((filter) => (
-            <FilterChip
-              key={filter.id}
-              active={categoryFilter === filter.id}
-              count={filter.count}
-              icon={ClipboardList}
-              label={filter.label}
-              onPress={() => setCategoryFilter(filter.id)}
-            />
-          ))}
-        </FilterGroup>
-      </View>
+      <FilterGroup label="주제">
+        {categoryFilters.map((filter) => (
+          <FilterChip
+            key={filter.id}
+            active={categoryFilter === filter.id}
+            count={filter.count}
+            icon={ClipboardList}
+            label={filter.label}
+            onPress={() => setCategoryFilter(filter.id)}
+          />
+        ))}
+      </FilterGroup>
 
       <ResearchList
         categoryFilter={categoryFilter}
@@ -1119,33 +1297,35 @@ function ResearchCard({
   selected: boolean
 }) {
   return (
-    <Card style={selected ? styles.selectedCard : null}>
-      <CardContent style={styles.serviceCardContent}>
-        <View style={styles.serviceCardHeader}>
-          <View style={styles.serviceCardCopy}>
-            <Text style={styles.itemTitle}>{request.title}</Text>
-            <Text style={styles.serviceOrganization}>{request.organization}</Text>
-            <Text style={styles.itemMeta}>{request.description}</Text>
+    <Pressable
+      accessibilityLabel={`${request.title} 상세보기`}
+      accessibilityRole="button"
+      onPress={onOpen}
+      style={({ pressed }) => (pressed ? styles.pressed : null)}
+    >
+      <Card style={selected ? styles.selectedCard : null}>
+        <CardContent style={styles.serviceCardContent}>
+          <View style={styles.serviceCardHeader}>
+            <View style={styles.serviceCardCopy}>
+              <Text style={styles.itemTitle}>{request.title}</Text>
+              <Text style={styles.serviceOrganization}>목적: {getProjectPurposeSummary(request)}</Text>
+              <Text style={styles.itemMeta}>진행 기관: {request.organization}</Text>
+            </View>
           </View>
-          <View style={styles.serviceBadgeStack}>
-            <Badge label={request.categoryLabel} variant="secondary" />
-          </View>
-        </View>
 
-        <View style={styles.serviceRewardRow}>
-          <View style={styles.serviceRewardCopy}>
-            <Text style={styles.tinyMuted}>보상</Text>
-            <Text style={styles.rewardText}>{request.reward}</Text>
+          <View style={styles.serviceRewardRow}>
+            <View style={styles.serviceRewardCopy}>
+              <Text style={styles.tinyMuted}>보상</Text>
+              <Text style={styles.rewardText}>{request.reward}</Text>
+            </View>
+            <View style={styles.detailPill}>
+              <Text style={styles.detailPillText}>상세보기</Text>
+              <ChevronRight color={colors.text} size={15} strokeWidth={2.25} />
+            </View>
           </View>
-          <Button
-            label="참여하기"
-            onPress={onOpen}
-            size="sm"
-            trailingIcon={ChevronRight}
-          />
-        </View>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </Pressable>
   )
 }
 
@@ -1160,66 +1340,41 @@ function ResearchDetailModal({
 }) {
   if (!request) return null
 
-  const requiredData = [
-    { label: '연령대', value: request.requiredAgeRanges.join(', '), reason: '정확한 생년월일 대신 범주형 연령대만 사용합니다.' },
-    { label: '제공 태그', value: request.requiredConditionTags.join(', '), reason: '원본 센서값이 아닌 제공용 범주 태그만 포함합니다.' },
-    { label: '지역', value: 'KR 단위 지역 코드', reason: '상세 주소나 GPS 좌표는 제외합니다.' },
-    { label: '측정 기간', value: '월 단위 recordedMonth', reason: '정밀 타임스탬프와 초 단위 기록은 제외합니다.' },
-  ]
+  const requiredData = getReadableRequiredData(request)
 
   return (
     <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" visible>
       <SafeAreaView style={styles.modalScreen}>
         <View style={styles.modalHeader}>
           <View style={styles.modalTitleGroup}>
-            <Badge label={request.categoryLabel} variant="dark" />
             <Text style={styles.modalTitle}>{request.title}</Text>
+            <Text style={styles.itemMeta}>진행 기관: {request.organization}</Text>
           </View>
           <Pressable accessibilityLabel="닫기" accessibilityRole="button" onPress={onClose} style={styles.iconButton}>
             <X color={colors.text} size={20} strokeWidth={2.2} />
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
-          <Text style={styles.modalDescription}>
-            {request.organization}에서 운영하는 프로젝트입니다. 동의한 범위의 건강 데이터만 제공하고 조건을 충족하면 보상을
-            받을 수 있습니다.
-          </Text>
-
           <View style={styles.calloutSoft}>
             <Text style={styles.calloutTitle}>프로젝트 목적</Text>
-            <Text style={styles.calloutText}>
-              {request.purposeLabel}를 위해 동의한 사용자의 범주형 웨어러블 데이터를 처리합니다. 플랫폼은 원본
-              센서 기록을 보관하지 않고 Sui에는 동의, 접근, 보상 상태만 기록합니다.
-            </Text>
+            <Text style={styles.calloutText}>{getProjectPurposeDetail(request)}</Text>
           </View>
 
           <Text style={styles.sectionHeading}>필요한 데이터</Text>
           <View style={styles.requiredDataList}>
             {requiredData.map((item) => (
               <View key={item.label} style={styles.requiredDataRow}>
-                <View style={styles.requiredDataCopy}>
-                  <Text style={styles.requiredDataLabel}>{item.label}</Text>
-                  <Text style={styles.requiredDataReason}>{item.reason}</Text>
-                </View>
+                <Text style={styles.requiredDataLabel}>{item.label}</Text>
                 <Text style={styles.requiredDataValue}>{item.value}</Text>
               </View>
             ))}
           </View>
 
           <View style={styles.infoGrid}>
-            <InfoRow label="허용 활용" value={request.allowedUse} />
-            <InfoRow label="보관 기간" value={`${request.retentionDays}일`} />
-            <InfoRow label="접근 기간" value={request.accessWindow} />
+            <InfoRow label="활용 방식" value={formatAllowedUse(request.allowedUse)} />
+            <InfoRow label="접근 요청 기한" value={request.expiresAt} />
             <InfoRow label="보상" value={request.reward} />
-            <InfoRow label="마감일" value={request.expiresAt} />
             <InfoRow label="모집 현황" value={request.participants} />
-          </View>
-
-          <View style={styles.warningPanel}>
-            <Text style={styles.calloutTitle}>제외되는 데이터</Text>
-            <Text style={styles.calloutText}>
-              이름, 전화번호, 이메일, 상세 주소, GPS 원본, 정밀 타임스탬프, 원본 센서 스트림은 제공 대상이 아닙니다.
-            </Text>
           </View>
         </ScrollView>
         <View style={styles.modalFooter}>
@@ -1229,6 +1384,100 @@ function ResearchDetailModal({
       </SafeAreaView>
     </Modal>
   )
+}
+
+const readableConditionLabels: Record<string, string> = {
+  active_energy: '활동으로 쓴 에너지',
+  blood_glucose: '혈당',
+  blood_pressure: '혈압',
+  distance_walking_running: '걷거나 뛴 거리',
+  exercise_minutes: '운동한 시간',
+  glucose_range: '혈당 범위',
+  heart_rate: '심박수',
+  hrv_sdnn: '심박 변화 정도',
+  insulin_delivery: '인슐린 투여 기록',
+  metabolic_pattern: '대사 변화 패턴',
+  mindful_minutes: '마음챙김 시간',
+  oxygen_saturation: '혈중 산소 수준',
+  respiratory_rate: '호흡수',
+  resting_heart_rate: '쉬고 있을 때 심박수',
+  sleep_analysis: '수면 기록',
+  sleep_consistency: '수면 규칙성',
+  sleep_duration: '총 수면 시간',
+  sleep_stage_band: '깊은 수면과 얕은 수면 같은 수면 단계',
+  stand_time: '일어서 있던 시간',
+  step_count: '걸음 수',
+  vo2_max: '심폐 체력',
+  workout_summary: '운동 기록 요약',
+}
+
+const allowedUseLabels: Record<string, string> = {
+  aggregate_research: '여러 사람의 데이터를 합친 연구 분석',
+  personalized_coaching: '개인 맞춤 건강 코칭 개선',
+  remote_monitoring: '원격 건강 모니터링 개선',
+  reward_validation: '리워드 조건 확인',
+}
+
+const projectPurposeSummaries: Record<string, string> = {
+  'REQ-SUI-1029': '활동 기록으로 더 정확한 웨어러블 리워드 기준 개발',
+  'REQ-SUI-1034': '수면·마음챙김 패턴을 활용한 회복 코칭 개선',
+  'REQ-SUI-1041': '심혈관 신호로 회복 변화를 파악하는 모니터링 기능 개발',
+  'REQ-SUI-1058': '혈당·인슐린 흐름을 이해하는 대사 건강 관리 기능 개발',
+}
+
+const projectPurposeDetails: Record<string, string> = {
+  'REQ-SUI-1029':
+    '걸음 수, 운동 시간, 활동 에너지, 심폐 체력 같은 기록을 보면 사용자가 실제로 얼마나 꾸준히 움직이는지 더 잘 판단할 수 있습니다. 이 프로젝트는 그 데이터를 활용해 웨어러블 기반 리워드 기준을 더 공정하고 정확하게 만드는 것이 목적입니다.',
+  'REQ-SUI-1034':
+    '수면 시간, 수면 단계, 마음챙김 시간을 함께 보면 회복 상태가 어떻게 달라지는지 이해할 수 있습니다. 이 데이터는 개인에게 더 잘 맞는 수면 코칭과 웨어러블 회복 기능을 개발하는 데 필요합니다.',
+  'REQ-SUI-1041':
+    '심박수, 심박 변화, 산소포화도, 혈압, 호흡수는 몸이 회복 중인지 무리하고 있는지 보여주는 기본 신호입니다. 이 프로젝트는 병원 밖에서도 회복 변화를 더 빨리 알아차리는 웨어러블 모니터링 기능을 만드는 것이 목적입니다.',
+  'REQ-SUI-1058':
+    '혈당과 인슐린 사용 흐름은 식사, 활동, 수면에 따른 대사 변화를 이해하는 데 필요합니다. 이 프로젝트는 원본 수치가 아닌 요약 데이터를 활용해 더 나은 대사 건강 관리 기능을 개발하는 것이 목적입니다.',
+}
+
+function getProjectPurposeSummary(request: ResearchRequest) {
+  return projectPurposeSummaries[request.id] ?? `${request.purposeLabel} 기능 개선`
+}
+
+function getProjectPurposeDetail(request: ResearchRequest) {
+  return projectPurposeDetails[request.id] ?? `${request.purposeLabel}에 필요한 건강 데이터 패턴을 이해하고 관련 기능을 개선하기 위한 프로젝트입니다.`
+}
+
+function getReadableRequiredData(request: ResearchRequest) {
+  return [
+    {
+      label: '나이대',
+      value: request.requiredAgeRanges.map(formatAgeRange).join(', '),
+    },
+    {
+      label: '건강 기록',
+      value: request.requiredConditionTags.map(formatConditionTag).join(', '),
+    },
+    {
+      label: '지역',
+      value: '시/도 수준의 지역 정보',
+    },
+    {
+      label: '기록 기간',
+      value: '월 단위 기간',
+    },
+  ]
+}
+
+function formatAgeRange(range: string) {
+  const startAge = Number(range.split('-')[0])
+  if (Number.isNaN(startAge)) return range
+
+  return `${startAge}대`
+}
+
+function formatConditionTag(tag: string) {
+  return readableConditionLabels[tag] ?? tag.replaceAll('_', ' ')
+}
+
+function formatAllowedUse(allowedUse: string) {
+  return allowedUseLabels[allowedUse] ?? allowedUse
 }
 
 function ParticipationList({
@@ -1241,10 +1490,6 @@ function ParticipationList({
   onSelectRequest: (requestId: string) => void
 }) {
   const [detailRecord, setDetailRecord] = useState<ParticipationRecord | null>(null)
-
-  if (detailRecord) {
-    return <ParticipationDetailPage record={detailRecord} onBack={() => setDetailRecord(null)} />
-  }
 
   return (
     <View style={styles.section}>
@@ -1270,6 +1515,8 @@ function ParticipationList({
           </CardContent>
         </Card>
       )}
+
+      <ParticipationDetailModal record={detailRecord} onClose={() => setDetailRecord(null)} />
     </View>
   )
 }
@@ -1283,34 +1530,267 @@ function ParticipationCard({
   record: ParticipationRecord
   selected: boolean
 }) {
+  const latestLog = getDataProvisionLogs(record)[0]
+
   return (
-    <Card style={selected ? styles.selectedCard : null}>
-      <CardContent style={styles.serviceCardContent}>
-        <View style={styles.serviceCardHeader}>
-          <View style={styles.serviceCardCopy}>
-            <Text style={styles.itemTitle}>{record.title}</Text>
-            <Text style={styles.itemMeta}>{record.description}</Text>
+    <Pressable
+      accessibilityLabel={`${record.title} 상세보기`}
+      accessibilityRole="button"
+      onPress={onOpen}
+      style={({ pressed }) => (pressed ? styles.pressed : null)}
+    >
+      <Card style={selected ? styles.selectedCard : null}>
+        <CardContent style={styles.serviceCardContent}>
+          <View style={styles.serviceCardHeader}>
+            <View style={styles.serviceCardCopy}>
+              <Text style={styles.itemTitle}>{record.title}</Text>
+              <Text style={styles.serviceOrganization}>목적: {getProjectPurposeSummary(record)}</Text>
+              <Text style={styles.itemMeta}>진행 기관: {record.organization}</Text>
+            </View>
           </View>
-          <Badge label={record.consentStatus} variant={record.progressValue >= 60 ? 'success' : 'warning'} />
+
+          <View style={styles.serviceRewardRow}>
+            <View style={styles.serviceRewardCopy}>
+              <Text style={styles.tinyMuted}>최근 제공</Text>
+              <Text style={styles.serviceDetailValue}>{latestLog ? `${latestLog.date} · ${latestLog.status}` : '제공 내역 없음'}</Text>
+            </View>
+            <View style={styles.detailPill}>
+              <Text style={styles.detailPillText}>상세보기</Text>
+              <ChevronRight color={colors.text} size={15} strokeWidth={2.25} />
+            </View>
+          </View>
+        </CardContent>
+      </Card>
+    </Pressable>
+  )
+}
+
+function ParticipationDetailModal({
+  onClose,
+  record,
+}: {
+  onClose: () => void
+  record: ParticipationRecord | null
+}) {
+  const provisionLogs = record ? getDataProvisionLogs(record) : []
+  const defaultLogId = provisionLogs[0]?.id ?? null
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(defaultLogId)
+
+  useEffect(() => {
+    setExpandedLogId(defaultLogId)
+  }, [defaultLogId])
+
+  if (!record) return null
+
+  const requiredData = getReadableRequiredData(record)
+
+  return (
+    <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" visible>
+      <SafeAreaView style={styles.modalScreen}>
+        <View style={styles.modalHeader}>
+          <View style={styles.modalTitleGroup}>
+            <Text style={styles.modalTitle}>{record.title}</Text>
+            <Text style={styles.itemMeta}>진행 기관: {record.organization}</Text>
+          </View>
+          <Pressable accessibilityLabel="닫기" accessibilityRole="button" onPress={onClose} style={styles.iconButton}>
+            <X color={colors.text} size={20} strokeWidth={2.2} />
+          </Pressable>
         </View>
 
-        <View style={styles.serviceRewardRow}>
-          <View style={styles.serviceRewardCopy}>
-            <Text style={styles.tinyMuted}>보상</Text>
-            <Text style={styles.rewardText}>{record.reward}</Text>
+        <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.calloutSoft}>
+            <Text style={styles.calloutTitle}>프로젝트 목적</Text>
+            <Text style={styles.calloutText}>{getProjectPurposeDetail(record)}</Text>
           </View>
-          <Button label="상세 보기" onPress={onOpen} size="sm" trailingIcon={ChevronRight} variant="outline" />
-        </View>
-      </CardContent>
-    </Card>
+
+          <Text style={styles.sectionHeading}>필요한 데이터</Text>
+          <View style={styles.requiredDataList}>
+            {requiredData.map((item) => (
+              <View key={item.label} style={styles.requiredDataRow}>
+                <Text style={styles.requiredDataLabel}>{item.label}</Text>
+                <Text style={styles.requiredDataValue}>{item.value}</Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.infoGrid}>
+            <InfoRow label="활용 방식" value={formatAllowedUse(record.allowedUse)} />
+            <InfoRow label="접근 요청 기한" value={record.expiresAt} />
+            <InfoRow label="보상" value={record.reward} />
+            <InfoRow label="모집 현황" value={record.participants} />
+          </View>
+
+          <View style={styles.accessLogSection}>
+            <Text style={styles.sectionHeading}>데이터 제공 내역</Text>
+            <Text style={styles.sectionLead}>제공 날짜를 열면 그날 보낸 데이터와 관리 상태를 확인할 수 있습니다.</Text>
+            <View style={styles.accessLogList}>
+              {provisionLogs.map((entry) => (
+                <DataProvisionLogItem
+                  key={entry.id}
+                  entry={entry}
+                  expanded={expandedLogId === entry.id}
+                  onToggle={() => setExpandedLogId(expandedLogId === entry.id ? null : entry.id)}
+                />
+              ))}
+            </View>
+            <View style={styles.accessLogActionRow}>
+              <Button icon={Plus} label="추가 제출하기" onPress={() => undefined} variant="secondary" />
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
   )
+}
+
+function DataProvisionLogItem({
+  entry,
+  expanded,
+  onToggle,
+}: {
+  entry: ReturnType<typeof getDataProvisionLogs>[number]
+  expanded: boolean
+  onToggle: () => void
+}) {
+  const statusTone = getProvisionStatusTone(entry.status)
+
+  return (
+    <View style={styles.accessLogItem}>
+      <Pressable accessibilityRole="button" onPress={onToggle} style={({ pressed }) => [styles.accessLogHeader, pressed ? styles.pressed : null]}>
+        <View style={styles.accessLogHeaderCopy}>
+          <Text style={styles.accessLogDate}>{entry.date}</Text>
+          <Text style={styles.accessLogSummary}>{entry.title}</Text>
+        </View>
+        <View style={styles.accessLogStatusBlock}>
+          <View style={[styles.accessLogStatusPill, { backgroundColor: statusTone.backgroundColor, borderColor: statusTone.borderColor }]}>
+            <Text style={[styles.accessLogStatus, { color: statusTone.color }]}>{entry.status}</Text>
+          </View>
+          <ChevronRight
+            color={colors.muted}
+            size={18}
+            strokeWidth={2.2}
+            style={expanded ? styles.accessLogChevronExpanded : styles.accessLogChevron}
+          />
+        </View>
+      </Pressable>
+
+      {expanded ? (
+        <View style={styles.accessLogPanel}>
+          <View style={styles.accessLogDataBlock}>
+            <Text style={styles.tinyMuted}>제공 데이터</Text>
+            <Text style={styles.accessLogData}>{entry.dataLabel}</Text>
+          </View>
+          <View style={styles.accessManagementList}>
+            {entry.management.map((item) => (
+              <View key={item.label} style={styles.accessManagementRow}>
+                <Text style={styles.accessManagementLabel}>{item.label}</Text>
+                <Text style={styles.accessManagementValue}>{item.value}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+function getProvisionStatusTone(status: string) {
+  if (status === '리워드 지급 완료') {
+    return {
+      backgroundColor: colors.successFill,
+      borderColor: '#a9d9bd',
+      color: colors.successText,
+    }
+  }
+
+  if (status === 'Agent 검토중') {
+    return {
+      backgroundColor: colors.accent,
+      borderColor: '#f5c26f',
+      color: colors.accentText,
+    }
+  }
+
+  return {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    color: colors.text,
+  }
+}
+
+function getDataProvisionLogs(record: ParticipationRecord) {
+  const readableData = record.requiredConditionTags.map(formatConditionTag)
+  const primaryData = readableData.slice(0, 5).join(', ')
+  const fullData = readableData.join(', ')
+
+  if (record.progressValue < 60) {
+    return [
+      {
+        dataLabel: fullData,
+        date: record.consentDate,
+        id: `${record.id}-pending-${record.consentDate}`,
+        management: [
+          { label: 'Agent 검토', value: '보낼 데이터가 프로젝트 목적과 맞는지 확인 중입니다.' },
+          { label: '전송 상태', value: '검토가 끝나기 전까지 기관은 데이터를 볼 수 없습니다.' },
+          { label: '저장 방식', value: '전송 전 임시 요약만 만들고 원본 건강 기록은 앱 밖에 저장하지 않습니다.' },
+        ],
+        status: 'Agent 검토중',
+        title: '데이터 제공 준비',
+      },
+    ]
+  }
+
+  return [
+    {
+      dataLabel: fullData,
+      date: '2026.06.08',
+      id: `${record.id}-20260608`,
+      management: [
+        { label: 'Agent 검증', value: '금지 데이터와 정밀 시간 정보가 제외됐는지 확인했습니다.' },
+        { label: '제출 상태', value: '검토가 끝나면 제출 완료 상태로 전환됩니다.' },
+        { label: '접근 권한', value: '검토 중에는 요청 기관이 데이터를 열람할 수 없습니다.' },
+      ],
+      status: 'Agent 검토중',
+      title: '일일 건강 기록 업데이트',
+    },
+    {
+      dataLabel: primaryData,
+      date: '2026.06.07',
+      id: `${record.id}-20260607`,
+      management: [
+        { label: 'Agent 검증', value: '프로젝트 목적에 필요한 항목만 남기고 상세 식별 정보는 제외했습니다.' },
+        { label: '기관 접근', value: '요청 기관은 요약 데이터와 접근 로그만 확인할 수 있습니다.' },
+        { label: '보상 처리', value: '접근 기록이 확인되면 보상 조건에 반영됩니다.' },
+      ],
+      status: '제출 완료',
+      title: `${formatAllowedUse(record.allowedUse)}용 요약 제공`,
+    },
+    {
+      dataLabel: primaryData,
+      date: '2026.06.06',
+      id: `${record.id}-20260606`,
+      management: [
+        { label: '동의 기록', value: '사용자 동의와 접근 요청 조건이 Sui 이벤트로 남았습니다.' },
+        { label: '저장 방식', value: '원본 센서값은 보관하지 않고 연구용 범주 데이터만 연결했습니다.' },
+        { label: '리워드', value: `${record.reward} 보상 지급이 완료되었습니다.` },
+      ],
+      status: '리워드 지급 완료',
+      title: '초기 데이터 제공',
+    },
+  ]
 }
 
 function FilterGroup({ children, label }: { children: ReactNode; label: string }) {
   return (
     <View style={styles.filterGroup}>
       <Text style={styles.filterGroupLabel}>{label}</Text>
-      <View style={styles.filterGroupControls}>{children}</View>
+      <ScrollView
+        horizontal
+        contentContainerStyle={styles.filterGroupControls}
+        showsHorizontalScrollIndicator={false}
+      >
+        {children}
+      </ScrollView>
     </View>
   )
 }
@@ -1341,204 +1821,6 @@ function FilterChip({
       <Text style={[styles.filterCount, active ? styles.filterCountActive : null]}>{count}</Text>
     </Pressable>
   )
-}
-
-function ParticipationDetailPage({ record, onBack }: { record: ParticipationRecord; onBack: () => void }) {
-  const logs = getParticipationLogs(record)
-
-  return (
-    <View style={styles.detailGrid}>
-      <Card>
-        <CardHeader>
-          <View style={styles.detailHeader}>
-            <View style={styles.detailHeaderCopy}>
-              <Badge label={record.consentStatus} variant={record.progressValue >= 60 ? 'success' : 'warning'} />
-              <CardTitle style={styles.detailTitle}>{record.title}</CardTitle>
-              <CardDescription>{record.organization}</CardDescription>
-            </View>
-            <Button icon={ChevronLeft} label="목록" onPress={onBack} size="sm" variant="outline" />
-          </View>
-        </CardHeader>
-        <CardContent>
-          <View style={styles.infoGrid}>
-            <InfoRow label="요청 목적" value={record.purposeLabel} />
-            <InfoRow label="동의일" value={record.consentDate} />
-            <InfoRow label="동의 상태" value={record.consentStatus} />
-            <InfoRow label="접근 상태" value={record.accessStatus} />
-            <InfoRow label="보상 상태" value={record.rewardStatus} />
-            <InfoRow label="예상 보상" value={record.reward} />
-          </View>
-
-          <View style={styles.warningPanel}>
-            <Text style={styles.calloutTitle}>데이터 제공 기록</Text>
-            <Text style={styles.calloutText}>
-              사용자가 동의한 뒤 Agent가 금지 필드를 확인하고, 암호화된 데이터와 manifest 참조만 Walrus/Sui 로그로
-              남긴 기록입니다.
-            </Text>
-          </View>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>데이터 제공 로그</CardTitle>
-          <CardDescription>내 데이터가 언제 처리되고 참조되었는지 보여주는 감사 이력</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <View style={styles.legendRow}>
-            <LogLegend color="blue" label="통과" />
-            <LogLegend color="yellow" label="Agent 검증중" />
-            <LogLegend color="red" label="오류 발견" />
-          </View>
-          <View style={styles.logList}>
-            {logs.map((log) => (
-              <LogCard key={`${log.event}-${log.date}`} log={log} />
-            ))}
-          </View>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>제공 데이터 범위</CardTitle>
-          <CardDescription>원본이 아닌 가명처리 필드</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <View style={styles.fieldTable}>
-            {sampleFields.map((field) => (
-              <View key={field.key} style={styles.fieldRow}>
-                <View style={styles.fieldRowCopy}>
-                  <Text style={styles.tinyMuted}>{field.label}</Text>
-                  <Text style={styles.fieldPolicy}>{field.policy}</Text>
-                </View>
-                <Text style={styles.fieldRowValue}>{field.value}</Text>
-              </View>
-            ))}
-          </View>
-        </CardContent>
-      </Card>
-    </View>
-  )
-}
-
-function getParticipationLogs(record: ParticipationRecord) {
-  if (record.consentStatus.includes('대기') || record.progressValue < 60) {
-    return [
-      {
-        date: '2026.06.05',
-        event: 'AgentReviewStarted',
-        title: 'Agent 검증중',
-        detail: 'Agent가 요청 목적과 데이터 범위가 사용자 선호와 충돌하지 않는지 확인하기 시작했습니다.',
-        icon: BrainCircuit,
-        tone: 'yellow' as const,
-      },
-      {
-        date: '2026.06.05',
-        event: 'ForbiddenFieldScan',
-        title: '오류 발견',
-        detail: '정밀 시간 필드가 남아 있어 업로드 전 월 단위 recordedMonth로 다시 변환해야 합니다.',
-        icon: AlertTriangle,
-        tone: 'red' as const,
-      },
-    ]
-  }
-
-  return [
-    {
-      date: '2026.06.06',
-      event: 'DataAssetRegistered',
-      title: '통과',
-      detail: '암호화된 데이터셋과 manifest blob 참조가 Walrus에 저장되고 Sui DataAsset으로 연결되었습니다.',
-      icon: ClipboardList,
-      tone: 'blue' as const,
-    },
-    {
-      date: '2026.06.06',
-      event: 'ConsentGranted',
-      title: '통과',
-      detail: `${record.purposeLabel} 목적과 ${record.accessWindow} 접근 기간에 대해 사용자 동의가 기록되었습니다.`,
-      icon: CheckCircle2,
-      tone: 'blue' as const,
-    },
-    {
-      date: '2026.06.06',
-      event: 'SealPolicyLinked',
-      title: '통과',
-      detail: '유효한 ConsentGrant가 있을 때만 요청자가 복호화 권한을 요청할 수 있도록 Seal policy가 연결되었습니다.',
-      icon: LockKeyhole,
-      tone: 'blue' as const,
-    },
-    {
-      date: '2026.06.06',
-      event: 'RewardEscrowPending',
-      title: '통과',
-      detail: `${record.reward} 보상은 접근 또는 활용 완료 이벤트 이후 지급 대기 상태로 전환됩니다.`,
-      icon: Wallet,
-      tone: 'blue' as const,
-    },
-  ]
-}
-
-function LogCard({
-  log,
-}: {
-  log: {
-    date: string
-    detail: string
-    event: string
-    icon: LucideIcon
-    title: string
-    tone: LogTone
-  }
-}) {
-  const tone = logToneStyle(log.tone)
-  const Icon = log.icon
-
-  return (
-    <View style={styles.logCard}>
-      <View style={[styles.logIcon, { backgroundColor: tone.iconBackground }]}>
-        <Icon color={tone.iconColor} size={20} strokeWidth={2.2} />
-      </View>
-      <View style={styles.logCopy}>
-        <Text style={styles.logDate}>{log.date}</Text>
-        <Text style={styles.logEvent}>{log.event}</Text>
-        <Text style={styles.logDetail}>{log.detail}</Text>
-      </View>
-    </View>
-  )
-}
-
-function LogLegend({ color, label }: { color: LogTone; label: string }) {
-  const tone = logToneStyle(color)
-
-  return (
-    <View style={styles.legendPill}>
-      <View style={[styles.legendDot, { backgroundColor: tone.dot }]} />
-      <Text style={styles.legendText}>{label}</Text>
-    </View>
-  )
-}
-
-function logToneStyle(tone: LogTone) {
-  const stylesByTone = {
-    blue: {
-      dot: colors.primary,
-      iconBackground: colors.successFill,
-      iconColor: colors.successText,
-    },
-    red: {
-      dot: colors.danger,
-      iconBackground: '#fff1f5',
-      iconColor: colors.danger,
-    },
-    yellow: {
-      dot: colors.accentText,
-      iconBackground: colors.accent,
-      iconColor: colors.accentText,
-    },
-  }
-
-  return stylesByTone[tone]
 }
 
 function AgentManagement() {
@@ -1631,6 +1913,128 @@ function InfoRow({ label, value, style }: { label: string; value: string; style?
 }
 
 const styles = StyleSheet.create({
+  activityGraphBar: {
+    backgroundColor: colors.primary,
+    borderTopLeftRadius: 6,
+    borderTopRightRadius: 6,
+    width: '100%',
+  },
+  activityGraphSlot: {
+    backgroundColor: colors.surface,
+    borderRadius: 6,
+    flex: 1,
+    height: '100%',
+    justifyContent: 'flex-end',
+    marginHorizontal: 2,
+    overflow: 'hidden',
+  },
+  accessLogChevron: {
+    transform: [{ rotate: '0deg' }],
+  },
+  accessLogChevronExpanded: {
+    transform: [{ rotate: '90deg' }],
+  },
+  accessLogActionRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingTop: 2,
+  },
+  accessLogData: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  accessLogDataBlock: {
+    gap: 4,
+  },
+  accessLogDate: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  accessLogHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+    padding: 12,
+  },
+  accessLogHeaderCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  accessLogItem: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  accessLogList: {
+    gap: 8,
+  },
+  accessLogPanel: {
+    backgroundColor: colors.background,
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    gap: 12,
+    padding: 12,
+  },
+  accessLogSection: {
+    gap: 10,
+  },
+  accessLogStatus: {
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
+  },
+  accessLogStatusBlock: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexShrink: 0,
+    gap: 4,
+  },
+  accessLogStatusPill: {
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  accessLogSummary: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  accessManagementLabel: {
+    color: colors.muted,
+    flexShrink: 0,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
+    minWidth: 66,
+  },
+  accessManagementList: {
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+  },
+  accessManagementRow: {
+    alignItems: 'flex-start',
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 9,
+  },
+  accessManagementValue: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+  },
   agentLimitCard: {
     backgroundColor: colors.accent,
   },
@@ -1654,65 +2058,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  appleHealthActionRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
   appleHealthCard: {
     borderColor: colors.border,
   },
   appleHealthCardConnected: {
     borderColor: '#a9d9bd',
   },
-  appleHealthCenterAction: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 2,
-  },
   appleHealthContent: {
-    gap: 16,
-  },
-  appleHealthDataTypes: {
-    flex: 1,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    minWidth: 180,
+    gap: 10,
+    padding: 12,
   },
   appleHealthHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  appleHealthIcon: {
     alignItems: 'center',
-    backgroundColor: colors.successFill,
-    borderRadius: 22,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  appleHealthTitle: {
-    color: colors.text,
-    fontSize: 22,
-    fontWeight: '300',
-    lineHeight: 29,
-  },
-  appleHealthTitleCopy: {
-    flex: 1,
-    gap: 3,
-    minWidth: 0,
-  },
-  appleHealthTitleRow: {
-    alignItems: 'flex-start',
-    flex: 1,
     flexDirection: 'row',
-    gap: 12,
-    minWidth: 0,
+    gap: 10,
   },
   backButton: {
     alignItems: 'center',
@@ -2055,51 +2414,6 @@ const styles = StyleSheet.create({
   detailGrid: {
     gap: 16,
   },
-  detailHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-  },
-  detailHeaderCopy: {
-    flex: 1,
-    gap: 8,
-  },
-  detailTitle: {
-    marginTop: 2,
-  },
-  fieldPolicy: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  fieldRow: {
-    alignItems: 'center',
-    borderBottomColor: colors.border,
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  fieldRowCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  fieldRowValue: {
-    color: colors.text,
-    flexShrink: 1,
-    fontSize: 14,
-    fontWeight: '700',
-    textAlign: 'right',
-  },
-  fieldTable: {
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
   emptyState: {
     gap: 6,
   },
@@ -2109,6 +2423,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.pill,
     borderWidth: 1,
+    flexShrink: 0,
     flexDirection: 'row',
     gap: 7,
     minHeight: 40,
@@ -2143,22 +2458,14 @@ const styles = StyleSheet.create({
   },
   filterGroupControls: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
+    paddingRight: 4,
   },
   filterGroupLabel: {
     color: colors.muted,
     fontSize: 12,
     fontWeight: '700',
     lineHeight: 16,
-  },
-  filterPanel: {
-    backgroundColor: colors.surface,
-    borderColor: '#d8e0e8',
-    borderRadius: radii.md,
-    borderWidth: 1,
-    gap: 14,
-    padding: 12,
   },
   headerSubtitle: {
     color: colors.muted,
@@ -2183,37 +2490,45 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexBasis: '31%',
     flexGrow: 1,
-    gap: 10,
-    minWidth: 150,
-    padding: 14,
+    gap: 6,
+    minWidth: 0,
+    padding: 9,
   },
   homeMetricGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+    flexWrap: 'nowrap',
+    gap: 7,
   },
   homeMetricHeader: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 10,
+    gap: 6,
+  },
+  homeMetricIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 15,
+    height: 30,
+    justifyContent: 'center',
+    width: 30,
   },
   homeMetricUnit: {
     color: colors.muted,
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '700',
-    paddingBottom: 5,
+    paddingBottom: 4,
   },
   homeMetricValue: {
     color: colors.text,
-    fontSize: 34,
+    fontSize: 25,
     fontWeight: '700',
     letterSpacing: 0,
-    lineHeight: 40,
+    lineHeight: 31,
   },
   homeMetricValueRow: {
     alignItems: 'flex-end',
     flexDirection: 'row',
-    gap: 7,
+    gap: 4,
   },
   homePage: {
     gap: 14,
@@ -2315,74 +2630,10 @@ const styles = StyleSheet.create({
     gap: 14,
     padding: 14,
   },
-  legendDot: {
-    borderRadius: 4,
-    height: 8,
-    width: 8,
-  },
-  legendPill: {
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  legendRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  legendText: {
-    color: colors.muted,
-    fontSize: 12,
-  },
   limitText: {
     color: '#273951',
     fontSize: 14,
     lineHeight: 22,
-  },
-  logCard: {
-    alignItems: 'flex-start',
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 12,
-    padding: 12,
-  },
-  logCopy: {
-    flex: 1,
-    gap: 3,
-  },
-  logDate: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  logDetail: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  logEvent: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  logIcon: {
-    alignItems: 'center',
-    borderRadius: 20,
-    height: 40,
-    justifyContent: 'center',
-    width: 40,
-  },
-  logList: {
-    gap: 10,
   },
   memoryItem: {
     backgroundColor: colors.background,
@@ -2530,6 +2781,82 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 10,
   },
+  notificationButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 22,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: 22,
+    top: 18,
+    width: 44,
+    zIndex: 20,
+    ...shadow,
+  },
+  notificationCopy: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  notificationDetail: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  notificationItem: {
+    alignItems: 'flex-start',
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 14,
+  },
+  notificationList: {
+    padding: 18,
+    paddingBottom: 28,
+  },
+  notificationMarker: {
+    backgroundColor: colors.border,
+    borderRadius: 5,
+    height: 10,
+    marginTop: 5,
+    width: 10,
+  },
+  notificationMarkerUnread: {
+    backgroundColor: colors.primary,
+  },
+  notificationTime: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
+  },
+  notificationTitle: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 20,
+  },
+  notificationTitleRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  notificationUnreadDot: {
+    backgroundColor: colors.danger,
+    borderColor: colors.surface,
+    borderRadius: 5,
+    borderWidth: 1,
+    height: 10,
+    position: 'absolute',
+    right: 9,
+    top: 9,
+    width: 10,
+  },
   monoMuted: {
     color: colors.muted,
     fontSize: 12,
@@ -2540,6 +2867,10 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 20,
   },
+  pageScrollHome: {
+    padding: 12,
+    paddingBottom: 12,
+  },
   pageScrollWide: {
     alignSelf: 'center',
     maxWidth: 760,
@@ -2547,6 +2878,56 @@ const styles = StyleSheet.create({
   },
   pageViewport: {
     flex: 1,
+  },
+  profileAvatar: {
+    alignItems: 'center',
+    backgroundColor: colors.successFill,
+    borderRadius: 21,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  profileAvatarText: {
+    color: colors.primary,
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 22,
+  },
+  profileCopy: {
+    flex: 1,
+    gap: 1,
+    minWidth: 0,
+  },
+  profileHeaderRow: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: 10,
+    minWidth: 0,
+  },
+  profileMeta: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  profileName: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 21,
+    fontWeight: '300',
+    lineHeight: 26,
+  },
+  profileNameRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between',
+  },
+  profileStatus: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17,
   },
   pressed: {
     opacity: 0.82,
@@ -2572,25 +2953,54 @@ const styles = StyleSheet.create({
     gap: 12,
     justifyContent: 'space-between',
   },
-  requiredDataCopy: {
+  rewardSummaryContent: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    padding: 14,
+  },
+  rewardSummaryCopy: {
     flex: 1,
-    gap: 3,
+    gap: 2,
     minWidth: 0,
+  },
+  rewardSummaryIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.successFill,
+    borderRadius: 20,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
+  },
+  rewardSummaryUnit: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    paddingBottom: 4,
+  },
+  rewardSummaryValue: {
+    color: colors.text,
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: 0,
+    lineHeight: 34,
+  },
+  rewardSummaryValueRow: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: 4,
   },
   requiredDataLabel: {
     color: colors.text,
+    flexShrink: 0,
     fontSize: 14,
     fontWeight: '700',
     lineHeight: 19,
+    minWidth: 66,
   },
   requiredDataList: {
     borderTopColor: colors.border,
     borderTopWidth: 1,
-  },
-  requiredDataReason: {
-    color: colors.muted,
-    fontSize: 12,
-    lineHeight: 18,
   },
   requiredDataRow: {
     alignItems: 'flex-start',
@@ -2603,11 +3013,10 @@ const styles = StyleSheet.create({
   },
   requiredDataValue: {
     color: colors.text,
-    flexShrink: 1,
+    flex: 1,
     fontSize: 14,
     fontWeight: '700',
     lineHeight: 20,
-    maxWidth: '48%',
     textAlign: 'right',
   },
   rewardText: {
@@ -2644,6 +3053,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
   },
+  detailPill: {
+    alignItems: 'center',
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  detailPillText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
   selectedCard: {
     borderColor: colors.primary,
   },
@@ -2661,9 +3086,11 @@ const styles = StyleSheet.create({
     gap: 10,
     justifyContent: 'space-between',
   },
-  serviceBadgeStack: {
-    alignItems: 'flex-end',
-    gap: 6,
+  serviceDetailValue: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 21,
   },
   serviceOrganization: {
     color: colors.primary,
@@ -2706,13 +3133,12 @@ const styles = StyleSheet.create({
   sleepCycleHeader: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
+    gap: 8,
   },
   sleepCycleLegend: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   sleepCycleLegendDot: {
     borderRadius: 5,
@@ -2726,17 +3152,17 @@ const styles = StyleSheet.create({
   },
   sleepCycleLegendText: {
     color: colors.muted,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    lineHeight: 16,
+    lineHeight: 14,
   },
   sleepCyclePanel: {
     backgroundColor: colors.background,
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
-    gap: 12,
-    padding: 14,
+    gap: 7,
+    padding: 10,
   },
   sleepCycleSegment: {
     borderTopLeftRadius: 4,
@@ -2757,7 +3183,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     flex: 1,
     fontSize: 10,
-    lineHeight: 14,
+    lineHeight: 12,
   },
   sleepCycleTimeRow: {
     flexDirection: 'row',
@@ -2770,10 +3196,30 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     flexDirection: 'row',
-    height: 104,
+    height: 68,
     overflow: 'hidden',
     paddingHorizontal: 6,
-    paddingTop: 10,
+    paddingTop: 6,
+  },
+  sleepSummaryCopy: {
+    flex: 1,
+    gap: 1,
+    minWidth: 0,
+  },
+  sleepSummaryValue: {
+    color: colors.text,
+    fontSize: 25,
+    fontWeight: '700',
+    letterSpacing: 0,
+    lineHeight: 31,
+  },
+  sleepSummaryValueBlock: {
+    minWidth: 92,
+  },
+  sleepSummaryValueRow: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    gap: 4,
   },
   tinyMuted: {
     color: colors.muted,
