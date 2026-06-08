@@ -6,25 +6,30 @@
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "start:dev": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "ios:device": "expo run:ios --device",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "expo": "^56.0.9",
-    "expo-status-bar": "^56.0.4",
+    "@kingstinct/react-native-healthkit": "^14.0.2",
+    "expo": "~54.0.35",
+    "expo-dev-client": "~6.0.21",
+    "expo-status-bar": "~3.0.9",
     "lucide-react-native": "^1.17.0",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "react-native": "0.85.3",
-    "react-native-svg": "15.15.4",
-    "react-native-web": "^0.21.2"
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-nitro-modules": "^0.35.9",
+    "react-native-svg": "15.12.1",
+    "react-native-web": "^0.21.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.28.3",
-    "@expo/cli": "^56.1.14",
-    "@types/react": "^19.2.14",
-    "typescript": "~6.0.2"
+    "@babel/core": "^7.26.0",
+    "@expo/cli": "54.0.25",
+    "@types/react": "~19.1.10",
+    "typescript": "~5.9.2"
   }
 }

@@ -7,7 +7,18 @@
     "userInterfaceStyle": "light",
     "scheme": "modi-user-app",
     "assetBundlePatterns": ["**/*"],
+    "plugins": [
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "걸음 수, 수면, 심박 데이터를 앱에서 보여주기 위해 Apple 건강정보를 읽습니다.",
+          "NSHealthUpdateUsageDescription": false,
+          "background": false
+        }
+      ]
+    ],
     "ios": {
+      "bundleIdentifier": "com.modi.userapp",
       "supportsTablet": true
     },
     "android": {

@@ -36,10 +36,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Progress } from '../components/ui/progress'
 import { Separator } from '../components/ui/separator'
 import { agentChecks, connectedHealthApps, participationRecords, researchRequests, sampleFields } from '../data/mvp'
+import {
+  fetchAppleHealthSnapshot,
+  getAppleHealthSupportMessage,
+  type AppleHealthSnapshot,
+} from '../services/appleHealth'
 import { colors, radii, shadow } from '../styles/theme'
 import type { ConnectedHealthApp, DashboardTab, ParticipationRecord, ResearchRequest } from '../types/dashboard'
 
 type LogTone = 'blue' | 'yellow' | 'red'
+type AppleHealthSyncStatus = 'idle' | 'syncing' | 'connected' | 'unsupported' | 'error'
 type HealthCalendarDay = {
   completion?: number
   day?: number
@@ -49,6 +55,14 @@ type HealthTodo = {
   done: boolean
   id: string
   label: string
+  value: string
+}
+type HomeMetric = {
+  detail: string
+  icon: LucideIcon
+  label: string
+  progress: number
+  unit: string
   value: string
 }
 type RequestCategoryFilter = 'all' | ResearchRequest['category']
@@ -76,7 +90,7 @@ const initialHealthTodos: HealthTodo[] = [
   { id: 'water', label: '물 6잔 마시기', value: '4 / 6잔', done: false },
 ]
 
-const appleHealthMetrics = [
+const appleHealthFallbackMetrics: HomeMetric[] = [
   {
     detail: '오늘 08:00 동기화',
     icon: Footprints,
@@ -233,17 +247,34 @@ function BottomTabButton({
 
 function HomePage() {
   const appleHealthApp = connectedHealthApps.find((app) => app.id === 'apple-health') ?? connectedHealthApps[0]
-  const [isAppleHealthConnected, setIsAppleHealthConnected] = useState(appleHealthApp.status === '연동됨')
-  const [lastSyncedAt, setLastSyncedAt] = useState('오늘 08:00 동기화')
+  const [appleHealthSnapshot, setAppleHealthSnapshot] = useState<AppleHealthSnapshot | null>(null)
+  const [healthMessage, setHealthMessage] = useState<string | null>(null)
+  const [healthSyncStatus, setHealthSyncStatus] = useState<AppleHealthSyncStatus>('idle')
+  const isAppleHealthConnected = appleHealthSnapshot !== null
+  const appleHealthMetrics = appleHealthSnapshot ? getAppleHealthMetrics(appleHealthSnapshot) : appleHealthFallbackMetrics
+  const statusLabel = getAppleHealthStatusLabel(healthSyncStatus, isAppleHealthConnected)
 
-  const handleAppleHealthPress = () => {
-    if (!isAppleHealthConnected) {
-      setIsAppleHealthConnected(true)
-      setLastSyncedAt('방금 연동됨')
+  const handleAppleHealthPress = async () => {
+    setHealthMessage(null)
+    setHealthSyncStatus('syncing')
+
+    const result = await fetchAppleHealthSnapshot()
+
+    if (result.status === 'success') {
+      setAppleHealthSnapshot(result.snapshot)
+      setHealthSyncStatus('connected')
       return
     }
 
-    setLastSyncedAt('방금 동기화됨')
+    if (result.status === 'unsupported') {
+      setAppleHealthSnapshot(null)
+      setHealthMessage(getAppleHealthSupportMessage(result.reason))
+      setHealthSyncStatus('unsupported')
+      return
+    }
+
+    setHealthMessage(result.error)
+    setHealthSyncStatus('error')
   }
 
   return (
@@ -258,29 +289,36 @@ function HomePage() {
               <View style={styles.appleHealthTitleCopy}>
                 <Text style={styles.appleHealthTitle}>Apple 건강정보</Text>
                 <Text style={styles.itemMeta}>
-                  {isAppleHealthConnected ? lastSyncedAt : '걸음 수, 수면, 심박 데이터를 가져옵니다.'}
+                  {getAppleHealthHeaderMessage({
+                    healthMessage,
+                    isConnected: isAppleHealthConnected,
+                    snapshot: appleHealthSnapshot,
+                    status: healthSyncStatus,
+                  })}
                 </Text>
               </View>
             </View>
-            <Badge label={isAppleHealthConnected ? '연동됨' : '미연동'} variant={isAppleHealthConnected ? 'success' : 'secondary'} />
+            <Badge label={statusLabel.label} variant={statusLabel.variant} />
           </View>
 
-          {isAppleHealthConnected ? (
-            <>
-              <View style={styles.homeMetricGrid}>
-                {appleHealthMetrics.map((metric) => (
-                  <HomeMetricCard key={metric.label} metric={metric} />
-                ))}
-              </View>
+          <View style={styles.homeMetricGrid}>
+            {appleHealthMetrics.map((metric) => (
+              <HomeMetricCard key={metric.label} metric={metric} />
+            ))}
+          </View>
 
-              <SleepCycleGraph />
-            </>
-          ) : (
-            <View style={styles.notConnectedPanel}>
-              <Text style={styles.itemTitle}>Apple 건강정보 연동이 필요합니다.</Text>
-              <Text style={styles.itemMeta}>연동 후 홈에서 오늘의 걸음 수, 수면 시간, 심박 데이터를 바로 확인할 수 있습니다.</Text>
+          {!isAppleHealthConnected ? (
+            <View style={styles.appleHealthCenterAction}>
+              <Button
+                disabled={healthSyncStatus === 'syncing'}
+                label={healthSyncStatus === 'syncing' ? '동기화 중' : '연동하기'}
+                onPress={handleAppleHealthPress}
+                trailingIcon={healthSyncStatus === 'syncing' ? undefined : ChevronRight}
+              />
             </View>
-          )}
+          ) : null}
+
+          <SleepCycleGraph sleep={appleHealthSnapshot?.sleep} />
 
           <View style={styles.appleHealthActionRow}>
             <View style={styles.appleHealthDataTypes}>
@@ -288,12 +326,14 @@ function HomePage() {
                 <Badge key={type} label={type} variant="outline" />
               ))}
             </View>
-            <Button
-              icon={isAppleHealthConnected ? RefreshCw : undefined}
-              label={isAppleHealthConnected ? '새로 동기화' : '연동하기'}
-              onPress={handleAppleHealthPress}
-              trailingIcon={isAppleHealthConnected ? undefined : ChevronRight}
-            />
+            {isAppleHealthConnected ? (
+              <Button
+                icon={RefreshCw}
+                disabled={healthSyncStatus === 'syncing'}
+                label={healthSyncStatus === 'syncing' ? '동기화 중' : '새로 동기화'}
+                onPress={handleAppleHealthPress}
+              />
+            ) : null}
           </View>
         </CardContent>
       </Card>
@@ -301,15 +341,20 @@ function HomePage() {
   )
 }
 
-function SleepCycleGraph() {
+function SleepCycleGraph({ sleep }: { sleep?: AppleHealthSnapshot['sleep'] }) {
+  const sleepStart = sleep?.startDate
+  const sleepEnd = sleep?.endDate
+  const sleepRange = sleep ? (sleepStart && sleepEnd ? `${formatClock(sleepStart)} - ${formatClock(sleepEnd)}` : '수면 데이터 없음') : '23:40 - 07:02'
+  const sleepBadge = sleep ? `수면 ${formatHours(sleep.totalMinutes)}` : '수면 효율 91%'
+
   return (
     <View style={styles.sleepCyclePanel}>
       <View style={styles.sleepCycleHeader}>
         <View>
           <Text style={styles.metricLabel}>수면 주기</Text>
-          <Text style={styles.measurementDetail}>23:40 - 07:02</Text>
+          <Text style={styles.measurementDetail}>{sleepRange}</Text>
         </View>
-        <Badge label="수면 효율 91%" variant="secondary" />
+        <Badge label={sleepBadge} variant="secondary" />
       </View>
 
       <View style={styles.sleepCycleTrack}>
@@ -360,14 +405,7 @@ function SleepCycleLegend({ color, label }: { color: string; label: string }) {
 function HomeMetricCard({
   metric,
 }: {
-  metric: {
-    detail: string
-    icon: LucideIcon
-    label: string
-    progress: number
-    unit: string
-    value: string
-  }
+  metric: HomeMetric
 }) {
   const Icon = metric.icon
 
@@ -387,6 +425,77 @@ function HomeMetricCard({
       <Text style={styles.measurementDetail}>{metric.detail}</Text>
     </View>
   )
+}
+
+function getAppleHealthMetrics(snapshot: AppleHealthSnapshot): HomeMetric[] {
+  const sleepHours = formatHours(snapshot.sleep.totalMinutes)
+  const heartRateValue = snapshot.heartRate ? `${snapshot.heartRate.bpm}` : '--'
+
+  return [
+    {
+      detail: `${formatClock(snapshot.syncedAt)} 동기화`,
+      icon: Footprints,
+      label: '걸음 수',
+      progress: clampProgress((snapshot.steps / 10000) * 100),
+      unit: '보',
+      value: snapshot.steps.toLocaleString('ko-KR'),
+    },
+    {
+      detail: snapshot.sleep.deepMinutes > 0 ? `깊은 수면 ${formatHours(snapshot.sleep.deepMinutes)}` : '수면 데이터 없음',
+      icon: Moon,
+      label: '수면',
+      progress: clampProgress((snapshot.sleep.totalMinutes / 480) * 100),
+      unit: '시간',
+      value: sleepHours,
+    },
+    {
+      detail: snapshot.heartRate ? `${formatClock(snapshot.heartRate.measuredAt)} 측정` : '최근 측정 없음',
+      icon: HeartPulse,
+      label: '심박',
+      progress: clampProgress(snapshot.heartRate?.bpm ?? 0),
+      unit: 'bpm',
+      value: heartRateValue,
+    },
+  ]
+}
+
+function getAppleHealthHeaderMessage({
+  healthMessage,
+  isConnected,
+  snapshot,
+  status,
+}: {
+  healthMessage: string | null
+  isConnected: boolean
+  snapshot: AppleHealthSnapshot | null
+  status: AppleHealthSyncStatus
+}) {
+  if (status === 'syncing') return 'Apple 건강정보 권한과 데이터를 확인하는 중입니다.'
+  if (healthMessage) return healthMessage
+  if (isConnected && snapshot) return `${formatClock(snapshot.syncedAt)} 동기화`
+  return '걸음 수, 수면, 심박 데이터를 가져옵니다.'
+}
+
+function getAppleHealthStatusLabel(status: AppleHealthSyncStatus, isConnected: boolean) {
+  if (status === 'syncing') return { label: '동기화 중', variant: 'warning' as const }
+  if (status === 'error') return { label: '오류', variant: 'warning' as const }
+  if (status === 'unsupported') return { label: '확인 필요', variant: 'warning' as const }
+  if (isConnected) return { label: '연동됨', variant: 'success' as const }
+  return { label: '미연동', variant: 'secondary' as const }
+}
+
+function clampProgress(value: number) {
+  return Math.max(0, Math.min(100, Math.round(value)))
+}
+
+function formatHours(minutes: number) {
+  return (minutes / 60).toFixed(1)
+}
+
+function formatClock(date: Date) {
+  const hours = `${date.getHours()}`.padStart(2, '0')
+  const minutes = `${date.getMinutes()}`.padStart(2, '0')
+  return `${hours}:${minutes}`
 }
 
 function HealthPage({
@@ -1558,6 +1667,11 @@ const styles = StyleSheet.create({
   appleHealthCardConnected: {
     borderColor: '#a9d9bd',
   },
+  appleHealthCenterAction: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 2,
+  },
   appleHealthContent: {
     gap: 16,
   },
@@ -2451,14 +2565,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
-  },
-  notConnectedPanel: {
-    backgroundColor: colors.background,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    gap: 6,
-    padding: 14,
   },
   rewardRow: {
     alignItems: 'center',

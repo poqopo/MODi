@@ -20,7 +20,7 @@ export const connectedHealthApps: ConnectedHealthApp[] = [
     name: 'Apple Health',
     description: '활동 리워드 자동 인증, 수면 회복 리포트, 안정시 심박 추세 분석을 제공합니다.',
     dataTypes: ['활동', '수면', '심박'],
-    status: '연동됨',
+    status: '연동 가능',
     icon: HeartPulse,
   },
   {
