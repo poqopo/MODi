@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modi.local/schemas/step_activity_record.schema.json",
+  "title": "MODi Step Activity Record",
+  "description": "Pseudonymized step-count research features. Exact dates, raw step counts, device serials, and direct identifiers are excluded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "dataType",
+    "recordedMonth",
+    "ageRange",
+    "deviceType",
+    "dataDomains",
+    "featureTags",
+    "dailyStepBandCounts",
+    "averageStepBand",
+    "activeDaysBand",
+    "goalHitDaysBand",
+    "consistencyBand"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "dataType": {
+      "type": "string",
+      "const": "step_activity_record"
+    },
+    "recordedMonth": {
+      "type": "string",
+      "pattern": "^20[0-9]{2}-(0[1-9]|1[0-2])$"
+    },
+    "ageRange": {
+      "type": "string",
+      "enum": ["20-29", "30-39", "40-49", "50-59", "60-69"]
+    },
+    "regionCode": {
+      "type": "string",
+      "enum": ["KR-SEOUL", "KR-GYEONGGI", "KR-BUSAN", "KR-OTHER"]
+    },
+    "deviceType": {
+      "type": "string",
+      "enum": ["wearable", "manual_entry", "lab_summary"]
+    },
+    "dataDomains": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["activity_workout"]
+      }
+    },
+    "featureTags": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["step_count"]
+      }
+    },
+    "dailyStepBandCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["under_3k", "3k_6k", "6k_10k", "10k_15k", "15k_plus"],
+      "properties": {
+        "under_3k": { "type": "integer", "minimum": 0 },
+        "3k_6k": { "type": "integer", "minimum": 0 },
+        "6k_10k": { "type": "integer", "minimum": 0 },
+        "10k_15k": { "type": "integer", "minimum": 0 },
+        "15k_plus": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "sampleDaysBand": {
+      "type": "string",
+      "enum": ["1-3d", "4-7d", "8-14d", "15-21d", "22d-plus"]
+    },
+    "averageStepBand": {
+      "type": "string",
+      "enum": ["under_3k", "3k_6k", "6k_10k", "10k_15k", "15k_plus"]
+    },
+    "activeDaysBand": {
+      "type": "string",
+      "enum": ["none", "low", "moderate", "high"]
+    },
+    "goalHitDaysBand": {
+      "type": "string",
+      "enum": ["none", "1-2d", "3-5d", "6-10d", "11d-plus"]
+    },
+    "consistencyBand": {
+      "type": "string",
+      "enum": ["stable", "variable", "highly_variable"]
+    }
+  }
+}

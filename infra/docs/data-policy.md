@@ -36,7 +36,8 @@ MODi MVP는 원본 헬스케어 데이터를 플랫폼이나 Walrus에 그대로
 | 혈당 수치 | 구간: `140-179` |
 | 진단명 | 연구용 태그: `diabetes` |
 | 측정 일시 | 월 단위: `2026-05` |
-| 걸음 수, 거리, 운동 시간, 활동 에너지 | 활동 구간: `low`, `moderate`, `high` |
+| 걸음 수 | 월 단위 `dailyStepBandCounts`, `averageStepBand`, `activeDaysBand`, `goalHitDaysBand` |
+| 거리, 운동 시간, 활동 에너지 | 활동 구간: `low`, `moderate`, `high` |
 | 수면 분석, 마음챙김 세션 | 회복 구간: `low`, `stable`, `high`, `irregular` |
 | 심박, 안정시 심박, HRV, 산소포화도, 혈압, 호흡수 | 활력징후 구간: `normal`, `watch`, `elevated` |
 | 인슐린 투여량 | 투여 구간: `none`, `low`, `medium`, `high` |
@@ -50,6 +51,28 @@ AI Agent는 업로드 전에 다음을 확인한다.
 - 데이터와 manifest의 hash가 일치한다.
 - 데이터 목적이 사용자의 동의 범위와 충돌하지 않는다.
 - Walrus에 올라가는 payload가 암호화되어 있다.
+
+## 걸음 데이터 MVP 업로드 단위
+
+가장 쉬운 첫 업로드 단위는 HealthKit 또는 웨어러블에서 가져온 일별 걸음 수다.
+
+업로드 전에 다음 값은 제거한다.
+
+- 정확한 일자
+- 정확한 걸음 수
+- 디바이스 고유 식별자
+- 앱 계정 식별자
+
+Walrus에 저장되는 암호화 payload는 다음 범주형 데이터만 포함한다.
+
+- `recordedMonth`
+- `dailyStepBandCounts`
+- `averageStepBand`
+- `activeDaysBand`
+- `goalHitDaysBand`
+- `consistencyBand`
+
+`infra/walrus/scripts/prepare_step_upload.mjs`가 이 변환, receipt 생성, Seal 암호화 준비, Walrus 저장, Sui 등록 인자 생성을 담당한다.
 
 ## Sui 기록 제한
 

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modi.local/schemas/data_manifest.schema.json",
+  "title": "MODi Walrus Data Manifest",
+  "description": "Public manifest for an encrypted Walrus dataset. It records only references, hashes, policy IDs, and pseudonymized metadata.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifestVersion",
+    "dataType",
+    "schemaVersion",
+    "ownerAddress",
+    "requestId",
+    "dataset",
+    "processingReceipt",
+    "encryption",
+    "metadata",
+    "retention"
+  ],
+  "properties": {
+    "manifestVersion": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "dataType": {
+      "type": "string",
+      "enum": ["step_activity_record", "pseudonymized_health_record"]
+    },
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+@[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "ownerAddress": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{1,64}$"
+    },
+    "requestId": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{1,64}$"
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["walrusBlobId", "walrusObjectId", "ciphertextSha256", "ciphertextBytes"],
+      "properties": {
+        "walrusBlobId": { "type": "string", "minLength": 1 },
+        "walrusObjectId": { "type": "string", "minLength": 1 },
+        "ciphertextSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "ciphertextBytes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "processingReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["walrusBlobId", "walrusObjectId", "sha256"],
+      "properties": {
+        "walrusBlobId": { "type": "string", "minLength": 1 },
+        "walrusObjectId": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "encryption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "mode",
+        "sealPackageId",
+        "sealIdentityHex",
+        "sealPolicyObjectId",
+        "threshold",
+        "keyServerObjectIds"
+      ],
+      "properties": {
+        "provider": { "type": "string", "const": "seal" },
+        "mode": { "type": "string", "enum": ["seal-sdk", "seal-cli", "local-dev-fallback"] },
+        "sealPackageId": { "type": "string", "pattern": "^0x[0-9a-fA-F]{1,64}$" },
+        "sealIdentityHex": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "sealPolicyObjectId": { "type": "string", "pattern": "^0x[0-9a-fA-F]{1,64}$" },
+        "threshold": { "type": "integer", "minimum": 1 },
+        "keyServerObjectIds": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^0x[0-9a-fA-F]{1,64}$" }
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recordedMonth", "ageRange", "deviceType", "dataDomains", "featureTags"],
+      "properties": {
+        "recordedMonth": { "type": "string", "pattern": "^20[0-9]{2}-(0[1-9]|1[0-2])$" },
+        "ageRange": { "type": "string" },
+        "regionCode": { "type": "string" },
+        "deviceType": { "type": "string" },
+        "dataDomains": { "type": "array", "items": { "type": "string" } },
+        "featureTags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["walrusContext", "walrusEpochs"],
+      "properties": {
+        "walrusContext": { "type": "string", "enum": ["testnet", "mainnet"] },
+        "walrusEpochs": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

@@ -14,6 +14,8 @@ const EConsentRevoked: u64 = 5;
 const ERequestMismatch: u64 = 6;
 const EAssetMismatch: u64 = 7;
 const EInvalidExpiry: u64 = 8;
+const EInvalidSealIdentity: u64 = 9;
+const ESealIdentityMismatch: u64 = 10;
 
 public struct DataRequest has key, store {
     id: UID,
@@ -50,6 +52,7 @@ public struct AccessGrant has key, store {
     id: UID,
     researcher: address,
     consent_id: ID,
+    seal_identity: vector<u8>,
     seal_policy_object_id: ID,
     expires_at_ms: u64,
     revoked: bool,
@@ -101,6 +104,7 @@ public struct AccessGranted has copy, drop {
     access_grant_id: ID,
     consent_id: ID,
     researcher: address,
+    seal_identity: vector<u8>,
     seal_policy_object_id: ID,
     expires_at_ms: u64,
 }
@@ -248,12 +252,14 @@ public fun revoke_consent(consent: &mut ConsentGrant, ctx: &mut TxContext) {
 public fun create_access_grant(
     request: &DataRequest,
     consent: &ConsentGrant,
+    seal_identity: vector<u8>,
     seal_policy_object_id: ID,
     expires_at_ms: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ): AccessGrant {
     let now_ms = clock.timestamp_ms();
+    assert!(seal_identity.length() > 0, EInvalidSealIdentity);
     assert!(request.researcher == ctx.sender(), EUnauthorized);
     assert!(request.active, EInactiveRequest);
     assert!(request.expires_at_ms > now_ms, EExpired);
@@ -267,6 +273,7 @@ public fun create_access_grant(
         id: object::new(ctx),
         researcher: ctx.sender(),
         consent_id: object::id(consent),
+        seal_identity,
         seal_policy_object_id,
         expires_at_ms,
         revoked: false,
@@ -276,11 +283,31 @@ public fun create_access_grant(
         access_grant_id: object::id(&access_grant),
         consent_id: access_grant.consent_id,
         researcher: access_grant.researcher,
+        seal_identity: access_grant.seal_identity,
         seal_policy_object_id,
         expires_at_ms,
     });
 
     access_grant
+}
+
+/// Seal key servers evaluate this function before releasing decryption key shares.
+/// The Seal identity is the SDK `id` bytes used when encrypting the Walrus dataset.
+public fun seal_approve(
+    id: vector<u8>,
+    access_grant: &AccessGrant,
+    consent: &ConsentGrant,
+    asset: &DataAsset,
+    clock: &Clock,
+) {
+    let now_ms = clock.timestamp_ms();
+    assert!(access_grant.seal_identity == id, ESealIdentityMismatch);
+    assert!(!access_grant.revoked, EConsentRevoked);
+    assert!(access_grant.expires_at_ms > now_ms, EExpired);
+    assert!(access_grant.consent_id == object::id(consent), ERequestMismatch);
+    assert!(!consent.revoked, EConsentRevoked);
+    assert!(consent.expires_at_ms > now_ms, EExpired);
+    assert!(consent.data_asset_id == object::id(asset), EAssetMismatch);
 }
 
 public fun revoke_access_grant(access_grant: &mut AccessGrant, ctx: &mut TxContext) {
@@ -386,4 +413,8 @@ public fun consent_revoked(consent: &ConsentGrant): bool {
 
 public fun access_grant_revoked(access_grant: &AccessGrant): bool {
     access_grant.revoked
+}
+
+public fun access_grant_seal_identity(access_grant: &AccessGrant): vector<u8> {
+    access_grant.seal_identity
 }

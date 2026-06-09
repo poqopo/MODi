@@ -1,0 +1,17 @@
+{
+  "source": "apple_health",
+  "ownerAddress": "0xef9d81217e5c9c213b27104dd5ea89534b28d7f0295289ae407147461094a614",
+  "requestId": "0x1111111111111111111111111111111111111111111111111111111111111111",
+  "ageRange": "30-39",
+  "regionCode": "KR-SEOUL",
+  "deviceType": "wearable",
+  "dailySteps": [
+    { "date": "2026-06-01", "steps": 8426 },
+    { "date": "2026-06-02", "steps": 6120 },
+    { "date": "2026-06-03", "steps": 10344 },
+    { "date": "2026-06-04", "steps": 4871 },
+    { "date": "2026-06-05", "steps": 12902 },
+    { "date": "2026-06-06", "steps": 7340 },
+    { "date": "2026-06-07", "steps": 9581 }
+  ]
+}

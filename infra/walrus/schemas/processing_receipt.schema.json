@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modi.local/schemas/processing_receipt.schema.json",
+  "title": "MODi Processing Receipt",
+  "description": "Verifiable receipt for filtering, pseudonymization, and upload preparation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "receiptVersion",
+    "dataType",
+    "processingPolicyVersion",
+    "createdAt",
+    "sourceSummary",
+    "removedFields",
+    "pseudonymization",
+    "hashes",
+    "agentVerification"
+  ],
+  "properties": {
+    "receiptVersion": { "type": "string", "const": "1.0.0" },
+    "dataType": { "type": "string", "const": "step_activity_record" },
+    "processingPolicyVersion": { "type": "string", "const": "step-data-policy-v1" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "sourceSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "inputRecordCount", "inputPeriod"],
+      "properties": {
+        "source": { "type": "string", "enum": ["apple_health", "samsung_health", "google_fit", "synthetic"] },
+        "inputRecordCount": { "type": "integer", "minimum": 1 },
+        "inputPeriod": { "type": "string", "enum": ["month"] }
+      }
+    },
+    "removedFields": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "pseudonymization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timeGranularity", "stepValueTransform", "identityPolicy"],
+      "properties": {
+        "timeGranularity": { "type": "string", "const": "month" },
+        "stepValueTransform": { "type": "string", "const": "range_bands_and_counts" },
+        "identityPolicy": { "type": "string", "const": "no_direct_identifier_in_dataset" }
+      }
+    },
+    "hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputSha256", "pseudonymizedDatasetSha256", "encryptedDatasetSha256"],
+      "properties": {
+        "inputSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "pseudonymizedDatasetSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "encryptedDatasetSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "agentVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "checks"],
+      "properties": {
+        "status": { "type": "string", "enum": ["passed", "failed"] },
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "status"],
+            "properties": {
+              "name": { "type": "string" },
+              "status": { "type": "string", "enum": ["passed", "failed"] },
+              "detail": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

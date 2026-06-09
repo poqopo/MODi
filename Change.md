@@ -30,6 +30,19 @@
 - 모집중 연구의 기관명을 사용자 앱에서 공개 조회할 수 있도록 RLS 정책을 추가했습니다.
 - 초기 확인용 seed 데이터를 추가했습니다.
 
+## Infra / Sui / Walrus / Seal
+
+- HealthKit/웨어러블 걸음 데이터를 첫 Walrus 업로드 단위로 정의했습니다.
+- 원본 일자와 정확한 걸음 수를 제거하고 월 단위 band/count 데이터로 변환하는 `prepare_step_upload.mjs`를 추가했습니다.
+- 가명처리 dataset, processing receipt, data manifest, Sui 등록 인자, 플랫폼 submission payload를 생성하도록 했습니다.
+- Walrus CLI 저장 옵션을 추가하고, synthetic demo 외에는 `local-dev-fallback` 암호문 저장을 거부하도록 했습니다.
+- 실제 Seal SDK/CLI를 붙일 수 있도록 `MODI_SEAL_ENCRYPT_CMD`, `sealIdentityHex`, key server, policy object 입력 구조를 마련했습니다.
+- `step_activity_record`, `data_manifest`, `processing_receipt` JSON schema와 synthetic step sample을 추가했습니다.
+- Sui `registry`에 `seal_identity` 기반 `AccessGrant`와 `seal_approve` policy hook을 추가했습니다.
+- `create_access_grant` 이벤트에 Seal identity를 포함하고, accessor/test coverage를 추가했습니다.
+- Walrus/Seal 제출 참조를 `participant_submissions`에 저장할 수 있도록 manifest와 `platform_submission.json` 형태를 맞췄습니다.
+- testnet에서 Walrus blob 저장, read-back 비교, Sui `DataAsset` 등록 smoke test를 완료하고 deployment note에 기록했습니다.
+
 ## 보안 및 구성
 
 - 클라이언트 앱에는 publishable key만 사용하도록 구성했습니다.
@@ -41,3 +54,7 @@
 - `apps/institution-dashboard`: `npm run lint && npm run build`
 - `apps/user-app`: `npm run typecheck`
 - 원격 Supabase에 migration을 적용하고 publishable key로 모집중 연구 조회를 확인했습니다.
+- `infra/sui`: `sui move build`, `sui move test`
+- `infra/walrus`: step upload script dry-run, Walrus testnet store/read-back/cmp
+- Sui testnet: `registry::register_data_asset` PTB dry-run 및 실행 성공
+- Supabase local lint는 현재 머신에 Docker CLI와 로컬 Postgres가 없어 실행하지 못했습니다.

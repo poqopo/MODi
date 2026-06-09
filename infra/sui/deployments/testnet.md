@@ -51,3 +51,27 @@ The local CLI emitted a client/server version mismatch warning:
 
 The publish and smoke test transactions both executed successfully despite the warning. Upgrade or dependency-verification work should use a current Sui CLI.
 
+## Walrus Step Data Smoke Test - 2026-06-08
+
+- Local CLI: `sui@testnet-v1.73.1`, `walrus@testnet-v1.50.0`
+- Deployer: `0xc25f6a8ffd5bfdc3bb9d84ca3e4283f82e7e8798c1e92e7fb4fd73b0329aa777`
+- Package ID: `0xfe5843387f3fffa133b2575afe1f424b9dd4bca5bbe09b668cc95f54d866b6f4`
+- Publish transaction: `EbVg41dYuZEJ2RjZGYWu6utUswTpc3udz1JoGijBsRYG`
+
+Walrus blobs created by `infra/walrus/scripts/prepare_step_upload.mjs --store --allow-local-dev-store`:
+
+- Dataset ciphertext blob: `-jq385KJn_dZbfrY_H3S1hU8CeYcOjnAtRC7RxNNan4`
+- Dataset Walrus object: `0xc16718417e6d554996a03ccfd8f62886624413f812b543795dcb3e1e6d6d446b`
+- Manifest blob: `UlJzN5nl3pRPd32tNRL7yeuo7o_UxkjEr-RdsGoq4l4`
+- Manifest Walrus object: `0x864cc796ce8e8748b55b8ad27acc52cf2e0fe9f809ddf93bdaf1798680f078aa`
+- Processing receipt blob: `cXT9HJ_EBe_EzuwBns-MVwx1wHVz9ghFhEE0CB2uddM`
+- Processing receipt Walrus object: `0xfcae78492ed1f453a745a077b1dea835a0a3f3d2506fdaea6e5d68797117a33a`
+- Manifest hash: `b51ef15f2a0c11c20f49041020fb144b37251c8c4b146be9fc31315061b23d82`
+
+Correct-order `registry::register_data_asset` smoke test:
+
+- Transaction: `GxCAUpZLg5bbuH1RFhTHC28xAKeoKtxyuesyZwD5UPB4`
+- Created DataAsset ID: `0x74f63597d2fd5233b0dcbebca8a3aa3f089c807c807aa803735d4ddbaa93405c`
+- Event type: `0xfe5843387f3fffa133b2575afe1f424b9dd4bca5bbe09b668cc95f54d866b6f4::registry::DataAssetRegistered`
+
+This smoke test used the synthetic local-dev Seal fallback encryption. Do not use `--allow-local-dev-store` for real participant data.

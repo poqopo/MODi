@@ -74,10 +74,19 @@ fun creates_request_consent_access_log_and_reward() {
     let access_grant = registry::create_access_grant(
         &request,
         &consent,
+        b"step_upload_policy_identity",
         object::id(&asset),
         800,
         &clock,
         scenario.ctx(),
+    );
+    assert!(registry::access_grant_seal_identity(&access_grant) == b"step_upload_policy_identity");
+    registry::seal_approve(
+        b"step_upload_policy_identity",
+        &access_grant,
+        &consent,
+        &asset,
+        &clock,
     );
     let access_log = registry::record_data_access(
         &access_grant,
