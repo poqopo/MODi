@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { AuthGate } from '@/components/auth/auth-gate'
 import { AppHeader } from '@/components/common/app-header'
 import { LandingPage } from '@/pages/LandingPage'
 import { ResearchCreatePage } from '@/pages/ResearchCreatePage'
@@ -21,8 +22,16 @@ function App() {
 
   return (
     <main className="min-h-screen bg-white text-ink">
-      <AppHeader activePage={page} onCreateResearch={goCreateResearch} onGoHome={goHome} />
-      {page === 'research-create' ? <ResearchCreatePage /> : <LandingPage onCreateResearch={goCreateResearch} />}
+      {page === 'research-create' ? (
+        <AuthGate onGoHome={goHome}>
+          <ResearchCreatePage />
+        </AuthGate>
+      ) : (
+        <>
+          <AppHeader activePage={page} onCreateResearch={goCreateResearch} onGoHome={goHome} />
+          <LandingPage onCreateResearch={goCreateResearch} />
+        </>
+      )}
     </main>
   )
 }

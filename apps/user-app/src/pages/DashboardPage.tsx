@@ -42,6 +42,7 @@ import {
   getAppleHealthSupportMessage,
   type AppleHealthSnapshot,
 } from '../services/appleHealth'
+import { fetchRecruitingResearchRequests } from '../services/researchProjects'
 import { colors, radii, shadow } from '../styles/theme'
 import type { ConnectedHealthApp, DashboardTab, ParticipationRecord, ResearchRequest } from '../types/dashboard'
 
@@ -87,8 +88,6 @@ const navItems: Array<{ id: DashboardTab; label: string; icon: LucideIcon }> = [
   { id: 'projects', label: '프로젝트', icon: ClipboardList },
   { id: 'my-projects', label: '내 프로젝트', icon: CheckCircle2 },
 ]
-
-const initialJoinedProjectIds = participationRecords.map((record) => record.id)
 
 const initialHealthTodos: HealthTodo[] = [
   { id: 'steps', label: '8,000보 이상 걷기', value: '8,426보', done: true },
@@ -161,7 +160,29 @@ export function DashboardPage({
   onSelectRequest,
   onTabChange,
 }: DashboardPageProps) {
-  const [joinedProjectIds, setJoinedProjectIds] = useState<string[]>(initialJoinedProjectIds)
+  const [joinedProjectIds, setJoinedProjectIds] = useState<string[]>([])
+  const [projectRequests, setProjectRequests] = useState<ResearchRequest[]>(researchRequests)
+  const [projectLoadStatus, setProjectLoadStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
+  const [projectLoadMessage, setProjectLoadMessage] = useState<string | null>(null)
+
+  const refreshProjectRequests = useCallback(async () => {
+    setProjectLoadStatus('loading')
+    setProjectLoadMessage(null)
+
+    try {
+      const requests = await fetchRecruitingResearchRequests()
+      setProjectRequests(requests.length > 0 ? requests : researchRequests)
+      setProjectLoadStatus('loaded')
+    } catch (error) {
+      setProjectRequests(researchRequests)
+      setProjectLoadStatus('error')
+      setProjectLoadMessage(error instanceof Error ? error.message : '프로젝트를 불러오지 못했습니다.')
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshProjectRequests()
+  }, [refreshProjectRequests])
 
   const joinProject = (requestId: string) => {
     setJoinedProjectIds((currentIds) => (currentIds.includes(requestId) ? currentIds : [...currentIds, requestId]))
@@ -174,12 +195,17 @@ export function DashboardPage({
       {activeTab === 'projects' ? (
         <ProjectsPage
           joinedProjectIds={joinedProjectIds}
+          loadMessage={projectLoadMessage}
+          loadStatus={projectLoadStatus}
+          requests={projectRequests}
           selectedRequestId={selectedRequestId}
+          onRefresh={refreshProjectRequests}
           onJoinProject={joinProject}
         />
       ) : activeTab === 'my-projects' ? (
         <MyProjectsPage
           joinedProjectIds={joinedProjectIds}
+          requests={projectRequests}
           selectedRequestId={selectedRequestId}
           onSelectRequest={onSelectRequest}
         />
@@ -1078,20 +1104,29 @@ function getBodyTone(score: number) {
 
 function ProjectsPage({
   joinedProjectIds,
+  loadMessage,
+  loadStatus,
+  requests,
   selectedRequestId,
+  onRefresh,
   onJoinProject,
 }: {
   joinedProjectIds: string[]
+  loadMessage: string | null
+  loadStatus: 'idle' | 'loading' | 'loaded' | 'error'
+  requests: ResearchRequest[]
   selectedRequestId: string
+  onRefresh: () => void
   onJoinProject: (requestId: string) => void
 }) {
   const [categoryFilter, setCategoryFilter] = useState<RequestCategoryFilter>('all')
   const joinedProjectIdSet = new Set(joinedProjectIds)
-  const availableProjects = researchRequests.filter((request) => !joinedProjectIdSet.has(request.id))
+  const availableProjects = requests.filter((request) => !joinedProjectIdSet.has(request.id))
   const categoryFilters = getCategoryFilters(availableProjects)
 
   return (
     <View style={styles.section}>
+      <ProjectSyncStatusCard loadMessage={loadMessage} loadStatus={loadStatus} onRefresh={onRefresh} />
       <FilterGroup label="주제">
         {categoryFilters.map((filter) => (
           <FilterChip
@@ -1115,16 +1150,44 @@ function ProjectsPage({
   )
 }
 
+function ProjectSyncStatusCard({
+  loadMessage,
+  loadStatus,
+  onRefresh,
+}: {
+  loadMessage: string | null
+  loadStatus: 'idle' | 'loading' | 'loaded' | 'error'
+  onRefresh: () => void
+}) {
+  if (loadStatus !== 'loading' && loadStatus !== 'error') {
+    return null
+  }
+
+  return (
+    <Card>
+      <CardContent style={styles.emptyState}>
+        <Text style={styles.itemTitle}>{loadStatus === 'loading' ? '모집 프로젝트를 불러오는 중입니다.' : 'Supabase 연결을 확인해 주세요.'}</Text>
+        <Text style={styles.itemMeta}>
+          {loadStatus === 'loading' ? '기관 대시보드에서 모집중인 연구를 동기화하고 있습니다.' : loadMessage ?? '기존 샘플 프로젝트를 표시합니다.'}
+        </Text>
+        {loadStatus === 'error' ? <Button icon={RefreshCw} label="다시 불러오기" onPress={onRefresh} size="sm" variant="secondary" /> : null}
+      </CardContent>
+    </Card>
+  )
+}
+
 function MyProjectsPage({
   joinedProjectIds,
+  requests,
   selectedRequestId,
   onSelectRequest,
 }: {
   joinedProjectIds: string[]
+  requests: ResearchRequest[]
   selectedRequestId: string
   onSelectRequest: (requestId: string) => void
 }) {
-  const records = getJoinedProjectRecords(joinedProjectIds)
+  const records = getJoinedProjectRecords(joinedProjectIds, requests)
 
   return (
     <View style={styles.section}>
@@ -1159,11 +1222,11 @@ function getCategoryFilters(source: ResearchRequest[]) {
   ]
 }
 
-function getJoinedProjectRecords(joinedProjectIds: string[]) {
+function getJoinedProjectRecords(joinedProjectIds: string[], requests: ResearchRequest[]) {
   const joinedProjectIdSet = new Set(joinedProjectIds)
   const currentRecordById = new Map(participationRecords.map((record) => [record.id, record]))
 
-  return researchRequests
+  return requests
     .filter((request) => joinedProjectIdSet.has(request.id))
     .map((request) => currentRecordById.get(request.id) ?? createParticipationRecord(request))
 }

@@ -10,12 +10,26 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { studies, type Study } from '@/data/landing'
+import {
+  createInstitutionForCurrentUser,
+  createResearchProject,
+  fetchInstitutionDashboard,
+  markSettlementSettled,
+  updateApplicationStatus,
+  type ApplicantStatus,
+  type CreateResearchProjectInput,
+  type DashboardApplicant,
+  type DashboardData,
+  type DashboardProject,
+  type DashboardSettlement,
+  type DashboardSubmission,
+  type SettlementStatus,
+} from '@/services/institutionDashboard'
 
 type ProjectMenuItem = {
   key: Exclude<ProjectView, 'home'>
@@ -26,44 +40,12 @@ type ProjectMenuItem = {
 
 type ProjectView = 'home' | 'participants' | 'datasets' | 'settlements'
 
-type Project = Study & {
-  mode: 'active' | 'draft'
-}
+type Project = DashboardProject
 
 type ApplicantDecision = '승인' | '거절'
-type ApplicantStatus = 'pending' | 'approved' | 'rejected'
-type SettlementStatus = 'settled' | 'pending'
-
-type ApplicantRecord = {
-  id: string
-  applicant: string
-  consent: string
-  score: number
-  dataSent: string
-  activity: number
-  lastSync: string
-  status: ApplicantStatus
-}
-
-type SubmissionRecord = {
-  date: string
-  category: string
-  period: string
-  volume: string
-  status: string
-}
-
-const draftProject: Project = {
-  id: 'REQ-DRAFT-1062',
-  title: 'Apple Health 활동/운동 리워드 검증 데이터',
-  status: '심사중',
-  target: '420명',
-  applicants: 0,
-  approved: 0,
-  dataScope: '걸음, 운동 시간, VO2 max',
-  rewardPool: '7,980 SUI',
-  mode: 'draft',
-}
+type ApplicantRecord = DashboardApplicant
+type SubmissionRecord = DashboardSubmission
+type SettlementRecord = DashboardSettlement
 
 const projectMenus: ProjectMenuItem[] = [
   { key: 'participants', label: '참여자 관리', detail: '신청자/참여자 관리', icon: Users },
@@ -83,150 +65,136 @@ const dataCategories = ['걸음', '운동 시간', '활동 에너지', 'VO2 max'
 const ageRanges = ['20-29', '30-39', '40-49', '50-59']
 const applicantDecisions: ApplicantDecision[] = ['승인', '거절']
 
-const applicantRows: ApplicantRecord[] = [
-  {
-    id: 'A-2048',
-    applicant: '30대 활동 데이터 신청자',
-    consent: '활동/운동 동의 완료',
-    score: 91,
-    dataSent: '2.8 GB',
-    activity: 94,
-    lastSync: '2시간 전',
-    status: 'pending',
-  },
-  {
-    id: 'A-2072',
-    applicant: '20대 러닝 데이터 신청자',
-    consent: 'VO2 max 범위 확인 필요',
-    score: 78,
-    dataSent: '1.1 GB',
-    activity: 72,
-    lastSync: '1일 전',
-    status: 'pending',
-  },
-  {
-    id: 'A-2104',
-    applicant: '40대 웨어러블 신청자',
-    consent: '보상 조건 미충족',
-    score: 63,
-    dataSent: '0.4 GB',
-    activity: 38,
-    lastSync: '3일 전',
-    status: 'rejected',
-  },
-  {
-    id: 'A-2128',
-    applicant: '30대 수면 회복 신청자',
-    consent: '필수 동의 완료',
-    score: 86,
-    dataSent: '3.6 GB',
-    activity: 88,
-    lastSync: '오늘',
-    status: 'approved',
-  },
-  {
-    id: 'A-2185',
-    applicant: '50대 심혈관 신청자',
-    consent: '심박/HRV 제공 동의 완료',
-    score: 83,
-    dataSent: '2.2 GB',
-    activity: 81,
-    lastSync: '5시간 전',
-    status: 'approved',
-  },
-  {
-    id: 'A-2219',
-    applicant: '20대 활동 리워드 신청자',
-    consent: '기기 유형 확인 필요',
-    score: 74,
-    dataSent: '0.9 GB',
-    activity: 66,
-    lastSync: '2일 전',
-    status: 'pending',
-  },
-]
-
-const settlementRows: Array<{
-  id: string
-  applicant: string
-  amount: string
-  status: SettlementStatus
-  transactionHash?: string
-}> = [
-  {
-    id: 'A-2048',
-    applicant: '30대 활동 데이터 신청자',
-    amount: '19 SUI',
-    status: 'settled',
-    transactionHash: '0x7b8c9f2a4d19',
-  },
-  { id: 'A-2072', applicant: '20대 러닝 데이터 신청자', amount: '19 SUI', status: 'pending' },
-  {
-    id: 'A-2128',
-    applicant: '30대 수면 회복 신청자',
-    amount: '19 SUI',
-    status: 'settled',
-    transactionHash: '0x4e21a9d6c803',
-  },
-  { id: 'A-2185', applicant: '50대 심혈관 신청자', amount: '19 SUI', status: 'pending' },
-]
-
-const submissionRowsByApplicant: Record<string, SubmissionRecord[]> = {
-  'A-2048': [
-    { date: '2026-06-08', category: '활동 데이터', period: '2026.06.01-06.07', volume: '1.2 GB', status: '검증 완료' },
-    { date: '2026-06-01', category: '운동 세션', period: '2026.05.25-05.31', volume: '0.9 GB', status: '검증 완료' },
-    { date: '2026-05-24', category: 'VO2 max 구간', period: '2026.05.18-05.24', volume: '0.7 GB', status: '정책 통과' },
-  ],
-  'A-2072': [
-    { date: '2026-06-07', category: '러닝 세션', period: '2026.06.01-06.07', volume: '0.6 GB', status: '확인 필요' },
-    { date: '2026-05-31', category: '활동 데이터', period: '2026.05.25-05.31', volume: '0.5 GB', status: '검증 완료' },
-  ],
-  'A-2104': [
-    { date: '2026-06-04', category: '웨어러블 요약', period: '2026.05.29-06.04', volume: '0.4 GB', status: '제출 부족' },
-  ],
-  'A-2128': [
-    { date: '2026-06-08', category: '수면 회복', period: '2026.06.01-06.07', volume: '1.5 GB', status: '검증 완료' },
-    { date: '2026-06-01', category: '활동 데이터', period: '2026.05.25-05.31', volume: '1.1 GB', status: '검증 완료' },
-    { date: '2026-05-24', category: '심박 요약', period: '2026.05.18-05.24', volume: '1.0 GB', status: '정책 통과' },
-  ],
-  'A-2185': [
-    { date: '2026-06-08', category: '심혈관 요약', period: '2026.06.01-06.07', volume: '0.8 GB', status: '검증 완료' },
-    { date: '2026-06-01', category: 'HRV 구간', period: '2026.05.25-05.31', volume: '0.7 GB', status: '검증 완료' },
-    { date: '2026-05-24', category: '산소포화도', period: '2026.05.18-05.24', volume: '0.7 GB', status: '정책 통과' },
-  ],
-  'A-2219': [
-    { date: '2026-06-06', category: '활동 데이터', period: '2026.06.01-06.06', volume: '0.5 GB', status: '확인 필요' },
-    { date: '2026-05-30', category: '기기 요약', period: '2026.05.25-05.30', volume: '0.4 GB', status: '검증 완료' },
-  ],
-}
-
 export function ResearchCreatePage() {
-  const projects: Project[] = studies.map((study) => ({ ...study, mode: 'active' as const }))
-  const [selectedProjectId, setSelectedProjectId] = useState(projects[0].id)
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [isCreatingProject, setIsCreatingProject] = useState(false)
   const [activeProjectView, setActiveProjectView] = useState<ProjectView>('home')
-  const [applicantStatuses, setApplicantStatuses] = useState<Record<string, ApplicantStatus>>(() =>
-    Object.fromEntries(applicantRows.map((row) => [row.id, row.status])),
-  )
-  const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0]
-  const applicantRecords = applicantRows.map((row) => ({ ...row, status: applicantStatuses[row.id] ?? row.status }))
+  const [isLoading, setIsLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState('')
+  const [isSavingProject, setIsSavingProject] = useState(false)
+  const [isSavingInstitution, setIsSavingInstitution] = useState(false)
+  const [pendingApplicantId, setPendingApplicantId] = useState<string | null>(null)
+  const [pendingSettlementId, setPendingSettlementId] = useState<string | null>(null)
 
-  const handleApplicantReview = (applicantId: string, decision: ApplicantDecision) => {
-    setApplicantStatuses((current) => ({
-      ...current,
-      [applicantId]: decision === '승인' ? 'approved' : 'rejected',
-    }))
+  const refreshDashboard = useCallback(async (preferredProjectId?: string) => {
+    setIsLoading(true)
+    setErrorMessage('')
+
+    try {
+      const nextData = await fetchInstitutionDashboard()
+      const nextProjectIds = nextData.projects.map((project) => project.id)
+
+      setDashboardData(nextData)
+      setSelectedProjectId((current) => {
+        if (preferredProjectId && nextProjectIds.includes(preferredProjectId)) {
+          return preferredProjectId
+        }
+
+        if (current && nextProjectIds.includes(current)) {
+          return current
+        }
+
+        return nextProjectIds[0] ?? null
+      })
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '대시보드 데이터를 불러오지 못했습니다.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void refreshDashboard()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [refreshDashboard])
+
+  const projects = useMemo(() => dashboardData?.projects ?? [], [dashboardData])
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null,
+    [projects, selectedProjectId],
+  )
+  const applicantRecords = selectedProject ? dashboardData?.applicantsByProject[selectedProject.id] ?? [] : []
+  const settlementRecords = selectedProject ? dashboardData?.settlementsByProject[selectedProject.id] ?? [] : []
+  const submissionRecordsByApplicant = dashboardData?.submissionsByApplicant ?? {}
+
+  const handleCreateProject = async (input: CreateResearchProjectInput) => {
+    setIsSavingProject(true)
+    setErrorMessage('')
+
+    try {
+      const projectId = await createResearchProject(input)
+      setIsCreatingProject(false)
+      setActiveProjectView('home')
+      await refreshDashboard(projectId)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '연구를 생성하지 못했습니다.')
+    } finally {
+      setIsSavingProject(false)
+    }
+  }
+
+  const handleCreateInstitution = async (input: { name: string; slug: string; websiteUrl?: string }) => {
+    setIsSavingInstitution(true)
+    setErrorMessage('')
+
+    try {
+      await createInstitutionForCurrentUser(input)
+      await refreshDashboard()
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '기관을 생성하지 못했습니다.')
+    } finally {
+      setIsSavingInstitution(false)
+    }
+  }
+
+  const handleApplicantReview = async (applicantId: string, decision: ApplicantDecision) => {
+    const nextStatus: Extract<ApplicantStatus, 'approved' | 'rejected'> = decision === '승인' ? 'approved' : 'rejected'
+
+    setPendingApplicantId(applicantId)
+    setErrorMessage('')
+
+    try {
+      await updateApplicationStatus(applicantId, nextStatus)
+      setDashboardData((current) => updateApplicantInDashboard(current, applicantId, nextStatus))
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '참여 신청 상태를 업데이트하지 못했습니다.')
+    } finally {
+      setPendingApplicantId(null)
+    }
+  }
+
+  const handleSettleReward = async (settlementId: string) => {
+    setPendingSettlementId(settlementId)
+    setErrorMessage('')
+
+    try {
+      const transaction = await markSettlementSettled(settlementId)
+      setDashboardData((current) => updateSettlementInDashboard(current, settlementId, transaction))
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '정산 상태를 업데이트하지 못했습니다.')
+    } finally {
+      setPendingSettlementId(null)
+    }
   }
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-canvas-soft">
+    <div className="min-h-[calc(100vh-56px)] bg-canvas-soft">
       <div className="container py-6 lg:py-8">
+        {errorMessage ? (
+          <div className="mb-5 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+            {errorMessage}
+          </div>
+        ) : null}
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
           <ResearchSidebar
             activeProjectView={activeProjectView}
             isCreatingProject={isCreatingProject}
             projects={projects}
-            selectedProjectId={selectedProjectId}
+            selectedProjectId={selectedProjectId ?? ''}
             onAddProject={() => {
               setActiveProjectView('home')
               setIsCreatingProject(true)
@@ -240,20 +208,147 @@ export function ResearchCreatePage() {
           />
 
           <div className="min-w-0 space-y-5">
-            {isCreatingProject ? (
-              <ProjectCreateForm />
-            ) : (
+            {isLoading ? (
+              <LoadingPanel />
+            ) : dashboardData?.institutionId === null ? (
+              <MembershipRequiredPanel isSaving={isSavingInstitution} onCreateInstitution={handleCreateInstitution} />
+            ) : isCreatingProject ? (
+              <ProjectCreateForm isSaving={isSavingProject} onCreateProject={handleCreateProject} />
+            ) : selectedProject ? (
               <ProjectWorkspace
                 applicantRecords={applicantRecords}
+                pendingApplicantId={pendingApplicantId}
+                pendingSettlementId={pendingSettlementId}
                 selectedProject={selectedProject}
                 selectedView={activeProjectView}
+                settlementRecords={settlementRecords}
+                submissionRecordsByApplicant={submissionRecordsByApplicant}
                 onReviewApplicant={handleApplicantReview}
+                onSettleReward={handleSettleReward}
               />
+            ) : (
+              <EmptyProjectPanel onAddProject={() => setIsCreatingProject(true)} />
             )}
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+function updateApplicantInDashboard(dashboardData: DashboardData | null, applicantId: string, status: ApplicantStatus) {
+  if (!dashboardData) {
+    return dashboardData
+  }
+
+  return {
+    ...dashboardData,
+    applicantsByProject: Object.fromEntries(
+      Object.entries(dashboardData.applicantsByProject).map(([projectId, applicants]) => [
+        projectId,
+        applicants.map((applicant) => (applicant.id === applicantId ? { ...applicant, status } : applicant)),
+      ]),
+    ),
+  }
+}
+
+function updateSettlementInDashboard(
+  dashboardData: DashboardData | null,
+  settlementId: string,
+  transaction: { transactionHash: string; transactionUrl: string },
+) {
+  if (!dashboardData) {
+    return dashboardData
+  }
+
+  return {
+    ...dashboardData,
+    settlementsByProject: Object.fromEntries(
+      Object.entries(dashboardData.settlementsByProject).map(([projectId, settlements]) => [
+        projectId,
+        settlements.map((settlement) =>
+          settlement.id === settlementId
+            ? {
+                ...settlement,
+                status: 'settled' as SettlementStatus,
+                transactionHash: transaction.transactionHash,
+                transactionUrl: transaction.transactionUrl,
+              }
+            : settlement,
+        ),
+      ]),
+    ),
+  }
+}
+
+function LoadingPanel() {
+  return (
+    <Card>
+      <CardContent className="p-8 text-sm text-ink-secondary">Supabase에서 기관 대시보드 데이터를 불러오는 중입니다.</CardContent>
+    </Card>
+  )
+}
+
+function MembershipRequiredPanel({
+  isSaving,
+  onCreateInstitution,
+}: {
+  isSaving: boolean
+  onCreateInstitution: (input: { name: string; slug: string; websiteUrl?: string }) => void
+}) {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const formData = new FormData(event.currentTarget)
+    onCreateInstitution({
+      name: getFormValue(formData, 'institutionName'),
+      slug: getFormValue(formData, 'institutionSlug'),
+      websiteUrl: getFormValue(formData, 'websiteUrl'),
+    })
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>기관 멤버십이 필요합니다</CardTitle>
+        <CardDescription>
+          현재 로그인한 Auth 사용자를 기관 owner로 연결해야 연구를 생성하고 데이터를 관리할 수 있습니다.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <Field label="기관명">
+            <input className={inputClassName} name="institutionName" defaultValue="MODi Research Lab" required />
+          </Field>
+          <Field label="기관 slug">
+            <input className={inputClassName} name="institutionSlug" defaultValue="modi-research-lab" required />
+          </Field>
+          <Field label="웹사이트">
+            <input className={inputClassName} name="websiteUrl" placeholder="https://example.org" type="url" />
+          </Field>
+          <Button type="submit" disabled={isSaving}>
+            {isSaving ? '기관 생성 중' : '기관 생성하기'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
+
+function EmptyProjectPanel({ onAddProject }: { onAddProject: () => void }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>등록된 연구가 없습니다</CardTitle>
+        <CardDescription>첫 연구를 만들면 신청자, 제출 데이터, 정산 상태를 이 대시보드에서 관리할 수 있습니다.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button type="button" onClick={onAddProject}>
+          <Plus className="mr-2 h-4 w-4" />
+          프로젝트 추가하기
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -303,14 +398,16 @@ function ResearchSidebar({
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium">{project.title}</span>
-                  <span className={`tabular mt-1 block text-xs ${isSelected ? 'text-ink-mute' : 'text-white/50'}`}>{project.id}</span>
+                  <span className={`tabular mt-1 block text-xs ${isSelected ? 'text-ink-mute' : 'text-white/50'}`}>
+                    {project.publicCode}
+                  </span>
                 </span>
                 <span
                   className={`shrink-0 rounded-full px-2 py-1 text-xs ${
                     isSelected ? 'bg-[#b9b9f9] text-[#4434d4]' : 'bg-white/10 text-white/70'
                   }`}
                 >
-                  {project.status}
+                  {project.statusLabel}
                 </span>
                 <ChevronDown
                   className={`mt-0.5 h-4 w-4 shrink-0 transition-transform ${
@@ -366,26 +463,93 @@ function ResearchSidebar({
   )
 }
 
-function ProjectCreateForm() {
+function ProjectCreateForm({
+  isSaving,
+  onCreateProject,
+}: {
+  isSaving: boolean
+  onCreateProject: (input: CreateResearchProjectInput) => void
+}) {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const formData = new FormData(event.currentTarget)
+    const rewardAmount = parseNumber(formData.get('rewardAmountPerParticipant'))
+    const targetParticipants = parseNumber(formData.get('targetParticipants'))
+    const accessPeriodDays = parseNumber(formData.get('accessPeriodDays'))
+
+    onCreateProject({
+      title: getFormValue(formData, 'title') || '새 연구',
+      purpose: getFormValue(formData, 'purpose'),
+      description: getFormValue(formData, 'description'),
+      targetParticipants,
+      rewardAmountPerParticipant: rewardAmount,
+      rewardCurrency: getFormValue(formData, 'rewardCurrency') || 'USDC',
+      accessPeriodDays,
+      dataScope: dataCategories,
+    })
+  }
+
   return (
-    <div className="min-w-0 space-y-5">
-      <BasicInfoCard selectedProject={draftProject} />
+    <form className="min-w-0 space-y-5" onSubmit={handleSubmit}>
+      <BasicInfoCard />
       <EligibilityCard />
       <DataSchemaCard />
-    </div>
+      <div className="flex justify-end">
+        <Button type="submit" disabled={isSaving}>
+          {isSaving ? '저장 중' : '연구 생성'}
+        </Button>
+      </div>
+    </form>
   )
+}
+
+function getFormValue(formData: FormData, key: string) {
+  return String(formData.get(key) ?? '').trim()
+}
+
+function parseNumber(value: FormDataEntryValue | null) {
+  const parsed = Number.parseFloat(String(value ?? '').replace(/[^0-9.]/g, ''))
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function formatBytes(bytes: number) {
+  if (bytes <= 0) {
+    return '0 MB'
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  let value = bytes
+  let unitIndex = 0
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+
+  return `${value.toLocaleString('ko-KR', { maximumFractionDigits: value >= 10 ? 0 : 1 })} ${units[unitIndex]}`
 }
 
 function ProjectWorkspace({
   applicantRecords,
+  pendingApplicantId,
+  pendingSettlementId,
   onReviewApplicant,
+  onSettleReward,
   selectedProject,
   selectedView,
+  settlementRecords,
+  submissionRecordsByApplicant,
 }: {
   applicantRecords: ApplicantRecord[]
+  pendingApplicantId: string | null
+  pendingSettlementId: string | null
   onReviewApplicant: (applicantId: string, decision: ApplicantDecision) => void
+  onSettleReward: (settlementId: string) => void
   selectedProject: Project
   selectedView: ProjectView
+  settlementRecords: SettlementRecord[]
+  submissionRecordsByApplicant: Record<string, SubmissionRecord[]>
 }) {
   const [selectedSubmissionApplicantId, setSelectedSubmissionApplicantId] = useState<string | null>(null)
   const selectedSubmissionApplicant =
@@ -398,13 +562,21 @@ function ProjectWorkspace({
       <ParticipantManagementView
         applicantRecords={applicantRecords}
         onOpenSubmission={setSelectedSubmissionApplicantId}
+        pendingApplicantId={pendingApplicantId}
         onReviewApplicant={onReviewApplicant}
       />
     )
   } else if (selectedView === 'datasets') {
     content = <ProjectDataSetCard selectedProject={selectedProject} />
   } else if (selectedView === 'settlements') {
-    content = <SettlementCard key={`${selectedProject.id}-settlement`} selectedProject={selectedProject} />
+    content = (
+      <SettlementCard
+        pendingSettlementId={pendingSettlementId}
+        selectedProject={selectedProject}
+        settlementRecords={settlementRecords}
+        onSettleReward={onSettleReward}
+      />
+    )
   } else {
     content = (
       <div className="min-w-0 space-y-5">
@@ -412,10 +584,16 @@ function ProjectWorkspace({
         <RecentApplicantsCard
           applicantRecords={applicantRecords}
           onOpenSubmission={setSelectedSubmissionApplicantId}
+          pendingApplicantId={pendingApplicantId}
           onReviewApplicant={onReviewApplicant}
         />
         <ProjectDataSetCard selectedProject={selectedProject} />
-        <SettlementCard key={`${selectedProject.id}-settlement`} selectedProject={selectedProject} />
+        <SettlementCard
+          pendingSettlementId={pendingSettlementId}
+          selectedProject={selectedProject}
+          settlementRecords={settlementRecords}
+          onSettleReward={onSettleReward}
+        />
       </div>
     )
   }
@@ -423,7 +601,11 @@ function ProjectWorkspace({
   return (
     <>
       {content}
-      <SubmissionHistoryModal applicant={selectedSubmissionApplicant} onClose={() => setSelectedSubmissionApplicantId(null)} />
+      <SubmissionHistoryModal
+        applicant={selectedSubmissionApplicant}
+        submissions={selectedSubmissionApplicant ? submissionRecordsByApplicant[selectedSubmissionApplicant.id] ?? [] : []}
+        onClose={() => setSelectedSubmissionApplicantId(null)}
+      />
     </>
   )
 }
@@ -432,9 +614,8 @@ function ProjectSummaryCard({ applicantRecords, selectedProject }: { applicantRe
   const pendingCount = applicantRecords.filter((record) => record.status === 'pending').length
   const participants = applicantRecords.filter((record) => record.status === 'approved')
   const averageActivity =
-    participants.length > 0 ? Math.round(participants.reduce((sum, record) => sum + record.activity, 0) / participants.length) : 0
+    participants.length > 0 ? Math.round(participants.reduce((sum, record) => sum + record.score, 0) / participants.length) : 0
   const statusReadyCount = pendingCount > 0 ? `${pendingCount}건 확인` : '정상'
-  const remainingUsdc = selectedProject.status === '모집중' ? '4,280 USDC' : '6,500 USDC'
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -442,7 +623,7 @@ function ProjectSummaryCard({ applicantRecords, selectedProject }: { applicantRe
         <CardContent className="p-4">
           <p className="text-xs text-ink-mute">전체 참여자</p>
           <p className="tabular mt-2 text-2xl font-light text-ink">{participants.length}명</p>
-          <p className="mt-1 text-xs text-ink-mute">목표 {selectedProject.target}</p>
+          <p className="mt-1 text-xs text-ink-mute">목표 {selectedProject.targetLabel}</p>
         </CardContent>
       </Card>
       <Card>
@@ -455,7 +636,7 @@ function ProjectSummaryCard({ applicantRecords, selectedProject }: { applicantRe
       <Card>
         <CardContent className="p-4">
           <p className="text-xs text-ink-mute">남은 USDC양</p>
-          <p className="tabular mt-2 text-2xl font-light text-ink">{remainingUsdc}</p>
+          <p className="tabular mt-2 text-2xl font-light text-ink">{selectedProject.rewardPoolLabel}</p>
           <p className="mt-1 text-xs text-ink-mute">정산 가능 잔액</p>
         </CardContent>
       </Card>
@@ -463,7 +644,7 @@ function ProjectSummaryCard({ applicantRecords, selectedProject }: { applicantRe
         <CardContent className="p-4">
           <p className="text-xs text-ink-mute">상태 체크</p>
           <p className="mt-2 text-2xl font-light text-ink">{statusReadyCount}</p>
-          <p className="mt-1 text-xs text-ink-mute">{selectedProject.status}</p>
+          <p className="mt-1 text-xs text-ink-mute">{selectedProject.statusLabel}</p>
         </CardContent>
       </Card>
     </div>
@@ -473,10 +654,12 @@ function ProjectSummaryCard({ applicantRecords, selectedProject }: { applicantRe
 function RecentApplicantsCard({
   applicantRecords,
   onOpenSubmission,
+  pendingApplicantId,
   onReviewApplicant,
 }: {
   applicantRecords: ApplicantRecord[]
   onOpenSubmission: (applicantId: string) => void
+  pendingApplicantId: string | null
   onReviewApplicant: (applicantId: string, decision: ApplicantDecision) => void
 }) {
   const recentApplicants = applicantRecords.filter((record) => record.status === 'pending').slice(0, 4)
@@ -520,13 +703,14 @@ function RecentApplicantsCard({
                   >
                     <td className="py-3 pr-5">
                       <span className="block font-medium text-ink">{row.applicant}</span>
-                      <span className="tabular mt-1 block text-xs text-ink-mute">{row.id}</span>
+                      <span className="tabular mt-1 block text-xs text-ink-mute">{row.applicantCode}</span>
                     </td>
                     <td className="tabular py-3 pr-5 font-medium text-ink">{row.score}</td>
                     <td className="py-3 pr-5 text-ink-secondary">{row.lastSync}</td>
                     <td className="py-3">
                       <DecisionButtonGroup
                         align="end"
+                        disabled={pendingApplicantId === row.id}
                         options={applicantDecisions}
                         onChange={(decision) => onReviewApplicant(row.id, decision)}
                       />
@@ -545,26 +729,29 @@ function RecentApplicantsCard({
 function ParticipantManagementView({
   applicantRecords,
   onOpenSubmission,
+  pendingApplicantId,
   onReviewApplicant,
 }: {
   applicantRecords: ApplicantRecord[]
   onOpenSubmission: (applicantId: string) => void
+  pendingApplicantId: string | null
   onReviewApplicant: (applicantId: string, decision: ApplicantDecision) => void
 }) {
   const pendingApplicants = applicantRecords.filter((record) => record.status === 'pending')
   const participants = applicantRecords.filter((record) => record.status === 'approved')
-  const totalDataSent = participants.reduce((sum, record) => sum + Number.parseFloat(record.dataSent), 0).toFixed(1)
+  const totalDataSent = formatBytes(participants.reduce((sum, record) => sum + record.dataSentBytes, 0))
 
   return (
     <div className="min-w-0 space-y-5">
       <div className="grid gap-3 sm:grid-cols-3">
         <MiniStat label="신청자" value={`${pendingApplicants.length}명`} />
         <MiniStat label="참여자" value={`${participants.length}명`} />
-        <MiniStat label="누적 제출량" value={`${totalDataSent} GB`} />
+        <MiniStat label="누적 제출량" value={totalDataSent} />
       </div>
       <ParticipantTableSection
         actionLabel="승인 여부"
         onOpenSubmission={onOpenSubmission}
+        pendingApplicantId={pendingApplicantId}
         rows={pendingApplicants}
         title="신청자"
         onReviewApplicant={onReviewApplicant}
@@ -577,12 +764,14 @@ function ParticipantManagementView({
 function ParticipantTableSection({
   actionLabel,
   onOpenSubmission,
+  pendingApplicantId,
   onReviewApplicant,
   rows,
   title,
 }: {
   actionLabel?: string
   onOpenSubmission: (applicantId: string) => void
+  pendingApplicantId?: string | null
   onReviewApplicant?: (applicantId: string, decision: ApplicantDecision) => void
   rows: ApplicantRecord[]
   title: string
@@ -624,7 +813,7 @@ function ParticipantTableSection({
                   >
                     <td className="py-3 pr-5">
                       <span className="block font-medium text-ink">{row.applicant}</span>
-                      <span className="tabular mt-1 block text-xs text-ink-mute">{row.id}</span>
+                      <span className="tabular mt-1 block text-xs text-ink-mute">{row.applicantCode}</span>
                     </td>
                     <td className="tabular py-3 pr-5 font-medium text-ink">{row.dataSent}</td>
                     <td className="py-3 pr-5 text-ink-secondary">{row.lastSync}</td>
@@ -632,6 +821,7 @@ function ParticipantTableSection({
                       {onReviewApplicant ? (
                         <DecisionButtonGroup
                           align="end"
+                          disabled={pendingApplicantId === row.id}
                           options={applicantDecisions}
                           onChange={(decision) => onReviewApplicant(row.id, decision)}
                         />
@@ -652,12 +842,18 @@ function ParticipantTableSection({
   )
 }
 
-function SubmissionHistoryModal({ applicant, onClose }: { applicant: ApplicantRecord | null; onClose: () => void }) {
+function SubmissionHistoryModal({
+  applicant,
+  onClose,
+  submissions,
+}: {
+  applicant: ApplicantRecord | null
+  onClose: () => void
+  submissions: SubmissionRecord[]
+}) {
   if (!applicant) {
     return null
   }
-
-  const submissions = submissionRowsByApplicant[applicant.id] ?? []
 
   return (
     <div
@@ -674,7 +870,7 @@ function SubmissionHistoryModal({ applicant, onClose }: { applicant: ApplicantRe
           <div className="min-w-0">
             <p className="text-sm font-medium text-ink">제출 기록</p>
             <p className="mt-1 truncate text-xs text-ink-mute">
-              {applicant.applicant} · {applicant.id}
+              {applicant.applicant} · {applicant.applicantCode}
             </p>
           </div>
           <Button aria-label="모달 닫기" size="icon" type="button" variant="ghost" onClick={onClose}>
@@ -697,7 +893,12 @@ function SubmissionHistoryModal({ applicant, onClose }: { applicant: ApplicantRe
             <MiniStat label="최근 제출" value={applicant.lastSync} />
             <MiniStat label="제출 건수" value={`${submissions.length}건`} />
           </div>
-          <div className="overflow-x-auto">
+          {submissions.length === 0 ? (
+            <div className="rounded-md border border-border bg-white px-4 py-8 text-center text-sm text-ink-mute">
+              아직 제출된 기록이 없습니다.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
             <table className="w-full min-w-[620px] text-left text-sm">
               <thead className="text-xs text-ink-mute">
                 <tr className="border-b border-border">
@@ -710,7 +911,7 @@ function SubmissionHistoryModal({ applicant, onClose }: { applicant: ApplicantRe
               </thead>
               <tbody>
                 {submissions.map((submission) => (
-                  <tr key={`${submission.date}-${submission.category}`} className="border-b border-border last:border-0">
+                  <tr key={submission.id} className="border-b border-border last:border-0">
                     <td className="tabular py-3 pr-5 font-medium text-ink">{submission.date}</td>
                     <td className="py-3 pr-5 text-ink-secondary">{submission.category}</td>
                     <td className="tabular py-3 pr-5 text-ink-secondary">{submission.period}</td>
@@ -724,7 +925,8 @@ function SubmissionHistoryModal({ applicant, onClose }: { applicant: ApplicantRe
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -744,23 +946,36 @@ function ProjectDataSetCard({ selectedProject }: { selectedProject: Project }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {selectedProject.dataScope.split(', ').map((scope) => (
-          <div key={scope} className="flex items-center justify-between gap-3 rounded-md border border-border bg-canvas-soft px-3 py-2">
-            <span className="text-sm font-medium text-ink">{scope}</span>
-            <Badge variant="outline">Seal policy</Badge>
+        {selectedProject.dataScope.length === 0 ? (
+          <div className="rounded-md border border-border bg-canvas-soft px-4 py-8 text-center text-sm text-ink-mute">
+            등록된 데이터 범위가 없습니다.
           </div>
-        ))}
+        ) : (
+          selectedProject.dataScope.map((scope) => (
+            <div key={scope} className="flex items-center justify-between gap-3 rounded-md border border-border bg-canvas-soft px-3 py-2">
+              <span className="text-sm font-medium text-ink">{scope}</span>
+              <Badge variant="outline">Seal policy</Badge>
+            </div>
+          ))
+        )}
       </CardContent>
     </Card>
   )
 }
 
-function SettlementCard({ selectedProject }: { selectedProject: Project }) {
-  const [settlementStatuses, setSettlementStatuses] = useState<Record<string, SettlementStatus>>(() =>
-    Object.fromEntries(settlementRows.map((row) => [row.id, row.status])),
-  )
-  const settledCount = Object.values(settlementStatuses).filter((status) => status === 'settled').length
-  const pendingCount = Object.values(settlementStatuses).filter((status) => status === 'pending').length
+function SettlementCard({
+  pendingSettlementId,
+  selectedProject,
+  settlementRecords,
+  onSettleReward,
+}: {
+  pendingSettlementId: string | null
+  selectedProject: Project
+  settlementRecords: SettlementRecord[]
+  onSettleReward: (settlementId: string) => void
+}) {
+  const settledCount = settlementRecords.filter((row) => row.status === 'settled').length
+  const pendingCount = settlementRecords.filter((row) => row.status === 'pending').length
 
   return (
     <Card>
@@ -777,77 +992,92 @@ function SettlementCard({ selectedProject }: { selectedProject: Project }) {
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-md bg-brand-dark p-4 text-white">
             <p className="text-xs text-white/60">예치 보상</p>
-            <p className="tabular mt-2 text-2xl font-light">{selectedProject.rewardPool}</p>
+            <p className="tabular mt-2 text-2xl font-light">{selectedProject.rewardPoolLabel}</p>
           </div>
           <MiniStat label="정산 완료" value={`${settledCount}건`} />
           <MiniStat label="정산 대기" value={`${pendingCount}건`} />
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="text-xs text-ink-mute">
-              <tr className="border-b border-border">
-                <th className="py-3 pr-5 font-medium">대상자</th>
-                <th className="py-3 pr-5 font-medium">보상액</th>
-                <th className="py-3 pr-5 font-medium">정산 상태</th>
-                <th className="py-3 text-right font-medium">액션</th>
-              </tr>
-            </thead>
-            <tbody>
-              {settlementRows.map((row) => {
-                const status = settlementStatuses[row.id] ?? row.status
-                const transactionHash = row.transactionHash ?? `0xsettle${row.id.replace(/[^0-9]/g, '')}`
+        {settlementRecords.length === 0 ? (
+          <div className="rounded-md border border-border bg-canvas-soft px-4 py-8 text-center text-sm text-ink-mute">
+            표시할 정산 내역이 없습니다.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="text-xs text-ink-mute">
+                <tr className="border-b border-border">
+                  <th className="py-3 pr-5 font-medium">대상자</th>
+                  <th className="py-3 pr-5 font-medium">보상액</th>
+                  <th className="py-3 pr-5 font-medium">정산 상태</th>
+                  <th className="py-3 text-right font-medium">액션</th>
+                </tr>
+              </thead>
+              <tbody>
+                {settlementRecords.map((row) => {
+                  const isSettled = row.status === 'settled'
+                  const transactionHref = row.transactionUrl ?? buildTransactionHref(row.transactionHash)
 
-                return (
-                  <tr key={row.id} className="border-b border-border last:border-0">
-                    <td className="py-3 pr-5">
-                      <p className="font-medium text-ink">{row.applicant}</p>
-                      <p className="tabular mt-1 text-xs text-ink-mute">{row.id}</p>
-                    </td>
-                    <td className="tabular py-3 pr-5 font-medium text-ink">{row.amount}</td>
-                    <td className="py-3 pr-5">
-                      <Badge variant={status === 'settled' ? 'secondary' : 'outline'}>
-                        {status === 'settled' ? '정산 완료' : '정산 대기'}
-                      </Badge>
-                    </td>
-                    <td className="py-3 text-right">
-                      {status === 'settled' ? (
-                        <a
-                          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
-                          href={`https://suiexplorer.com/txblock/${transactionHash}`}
-                          rel="noreferrer"
-                          target="_blank"
-                        >
-                          트랜잭션 확인
-                        </a>
-                      ) : (
-                        <Button
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                          onClick={() => setSettlementStatuses((current) => ({ ...current, [row.id]: 'settled' }))}
-                        >
-                          정산하기
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                  return (
+                    <tr key={row.id} className="border-b border-border last:border-0">
+                      <td className="py-3 pr-5">
+                        <p className="font-medium text-ink">{row.applicant}</p>
+                        <p className="tabular mt-1 text-xs text-ink-mute">{row.applicantCode}</p>
+                      </td>
+                      <td className="tabular py-3 pr-5 font-medium text-ink">{row.amountLabel}</td>
+                      <td className="py-3 pr-5">
+                        <Badge variant={isSettled ? 'secondary' : 'outline'}>{isSettled ? '정산 완료' : '정산 대기'}</Badge>
+                      </td>
+                      <td className="py-3 text-right">
+                        {isSettled && transactionHref ? (
+                          <a
+                            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                            href={transactionHref}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            트랜잭션 확인
+                          </a>
+                        ) : (
+                          <Button
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                            disabled={pendingSettlementId === row.id}
+                            onClick={() => onSettleReward(row.id)}
+                          >
+                            {pendingSettlementId === row.id ? '정산 중' : '정산하기'}
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
 }
 
+function buildTransactionHref(transactionHash: string | null) {
+  if (!transactionHash) {
+    return null
+  }
+
+  return `https://suivision.xyz/txblock/${transactionHash}`
+}
+
 function DecisionButtonGroup<T extends string>({
   align = 'start',
+  disabled = false,
   onChange,
   options,
   value,
 }: {
   align?: 'start' | 'end'
+  disabled?: boolean
   onChange: (value: T) => void
   options: T[]
   value?: T
@@ -860,10 +1090,11 @@ function DecisionButtonGroup<T extends string>({
         return (
           <button
             key={option}
-            className={`min-w-14 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+            className={`min-w-14 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               isSelected ? 'border-brand-dark bg-brand-dark text-white' : 'border-border bg-white text-ink-secondary hover:bg-canvas-soft'
             }`}
             type="button"
+            disabled={disabled}
             onClick={(event) => {
               event.stopPropagation()
               onChange(option)
@@ -907,7 +1138,7 @@ function StatusBadge({ status }: { status: ApplicantStatus }) {
   return <Badge variant="outline">신청</Badge>
 }
 
-function BasicInfoCard({ selectedProject }: { selectedProject: Project }) {
+function BasicInfoCard() {
   return (
     <Card>
       <CardHeader>
@@ -922,17 +1153,18 @@ function BasicInfoCard({ selectedProject }: { selectedProject: Project }) {
       <CardContent>
         <div className="grid gap-4 md:grid-cols-2">
           <Field label="연구명">
-            <input className={inputClassName} defaultValue={selectedProject.title} />
+            <input className={inputClassName} name="title" defaultValue="Apple Health 활동/운동 리워드 검증 데이터" required />
           </Field>
           <Field label="기관명">
-            <input className={inputClassName} defaultValue="Sui Active Insurance" />
+            <input className={inputClassName} name="institutionName" defaultValue="Sui Active Insurance" />
           </Field>
           <Field className="md:col-span-2" label="연구 목적">
-            <input className={inputClassName} defaultValue="예방 리워드 산정" />
+            <input className={inputClassName} name="purpose" defaultValue="예방 리워드 산정" />
           </Field>
           <Field className="md:col-span-2" label="연구 설명">
             <textarea
               className={`${inputClassName} min-h-28 resize-none leading-6`}
+              name="description"
               defaultValue="걸음 수, 이동 거리, 운동 시간, 활동 에너지, VO2 max를 범주화해 리워드 산정 정확도를 검증합니다."
             />
           </Field>
@@ -957,13 +1189,14 @@ function EligibilityCard() {
       <CardContent className="space-y-5">
         <div className="grid gap-4 md:grid-cols-3">
           <Field label="목표 인원">
-            <input className={inputClassName} defaultValue="420" inputMode="numeric" />
+            <input className={inputClassName} name="targetParticipants" defaultValue="420" inputMode="numeric" />
           </Field>
-          <Field label="1인 보상">
-            <input className={inputClassName} defaultValue="19 SUI" />
+          <Field label="1인 보상(USDC)">
+            <input className={inputClassName} name="rewardAmountPerParticipant" defaultValue="19" inputMode="decimal" />
+            <input type="hidden" name="rewardCurrency" value="USDC" />
           </Field>
           <Field label="접근 기간">
-            <input className={inputClassName} defaultValue="60일" />
+            <input className={inputClassName} name="accessPeriodDays" defaultValue="60일" inputMode="numeric" />
           </Field>
         </div>
 
