@@ -11,6 +11,7 @@ const defaultOutDir = path.resolve(scriptDir, '../build/step-upload');
 
 const schemaVersion = 'step_activity_record@1.0.0';
 const processingPolicyVersion = 'step-data-policy-v1';
+const policyPackVersion = '1.0.0';
 const registerDataAssetArgOrder = [
   'dataset_blob_id',
   'manifest_blob_id',
@@ -19,6 +20,54 @@ const registerDataAssetArgOrder = [
   'processing_policy_version',
   'processing_receipt_blob_id',
 ];
+const registerAgentWorkflowArgOrder = [
+  'policy_blob_id',
+  'policy_hash',
+  'policy_version',
+  'agent_audit_blob_id',
+  'agent_audit_hash',
+  'checkpoint_blob_id',
+  'checkpoint_hash',
+  'memory_namespace',
+  'latest_stage',
+];
+const stepAllowedFields = [
+  'activeDaysBand',
+  'ageRange',
+  'averageStepBand',
+  'consistencyBand',
+  'dailyStepBandCounts',
+  'dataDomains',
+  'dataType',
+  'deviceType',
+  'featureTags',
+  'goalHitDaysBand',
+  'recordedMonth',
+  'regionCode',
+  'sampleDaysBand',
+  'schemaVersion',
+];
+const stepForbiddenFields = [
+  'address',
+  'date',
+  'deviceId',
+  'email',
+  'fullName',
+  'latitude',
+  'longitude',
+  'name',
+  'phone',
+  'sourceId',
+  'steps',
+  'userId',
+  'walletAddress',
+];
+const knownAllowedUses = new Set([
+  'aggregate_research',
+  'personalized_coaching',
+  'remote_monitoring',
+  'reward_validation',
+]);
 
 const prohibitedRawKeys = new Set([
   'address',
@@ -57,8 +106,12 @@ async function main() {
     epochs: Number(args.epochs ?? process.env.WALRUS_EPOCHS ?? 2),
     input: path.resolve(args.input ?? defaultInput),
     keyServerObjectIds: csv(args.keyServerObjectIds ?? process.env.MODI_SEAL_KEY_SERVER_IDS),
+    allowedUse: args.allowedUse ?? process.env.MODI_ALLOWED_USE,
+    memoryNamespace: args.memoryNamespace ?? process.env.MODI_AGENT_MEMORY_NAMESPACE,
     outDir: path.resolve(args.outDir ?? defaultOutDir),
     ownerAddress: args.owner ?? process.env.MODI_OWNER_ADDRESS,
+    policyId: args.policyId ?? process.env.MODI_POLICY_ID,
+    projectId: args.projectId ?? process.env.MODI_PROJECT_ID,
     requestId: args.requestId ?? process.env.MODI_REQUEST_ID,
     sealPackageId: args.sealPackageId ?? process.env.MODI_SEAL_PACKAGE_ID ?? process.env.MODI_SUI_PACKAGE_ID ?? '0x0',
     sealPolicyObjectId: args.sealPolicyObjectId ?? process.env.MODI_SEAL_POLICY_OBJECT_ID ?? '0x0',
@@ -69,6 +122,9 @@ async function main() {
 
   assertPositiveInteger(cfg.epochs, 'Walrus epochs');
   assertPositiveInteger(cfg.sealThreshold, 'Seal threshold');
+  if (cfg.store && !process.env.MODI_SEAL_ENCRYPT_CMD && !cfg.allowLocalDevStore) {
+    throw new Error('Refusing to store local-dev-fallback artifacts on Walrus. Set MODI_SEAL_ENCRYPT_CMD for real Seal encryption, or pass --allow-local-dev-store for synthetic demos only.');
+  }
 
   const raw = await readJson(cfg.input);
   assertNoProhibitedKeys(raw);
@@ -77,10 +133,24 @@ async function main() {
   const requestId = normalizeObjectId(cfg.requestId ?? raw.requestId, 'requestId');
   const sealPackageId = normalizeObjectId(cfg.sealPackageId, 'sealPackageId');
   const sealPolicyObjectId = normalizeObjectId(cfg.sealPolicyObjectId, 'sealPolicyObjectId');
+  const projectId = requiredString(cfg.projectId ?? raw.projectId ?? 'synthetic-step-reward-study', 'projectId');
+  const allowedUse = requiredString(cfg.allowedUse ?? raw.allowedUse ?? 'reward_validation', 'allowedUse');
+  const policyId = requiredString(cfg.policyId ?? raw.policyId ?? 'step_monthly_reward_policy_v1', 'policyId');
+  const memoryNamespace = requiredString(
+    cfg.memoryNamespace ?? deriveMemoryNamespace({ ownerAddress, policyId, requestId }),
+    'memoryNamespace',
+  );
 
   await mkdir(cfg.outDir, { recursive: true });
 
+  const policyPack = buildPolicyPack({ allowedUse, policyId, projectId });
+  const policyPath = path.join(cfg.outDir, 'policy_pack.json');
+  await writeJson(policyPath, policyPack);
+  const policyHash = hashJson(policyPack);
+  const policyBlob = await storeWalrusBlob(policyPath, cfg);
+
   const stepRecord = buildStepRecord(raw);
+  assertPolicyAllowedFields(stepRecord, policyPack);
   assertNoProhibitedKeys(stepRecord);
   assertNoRawStepLeak(stepRecord);
 
@@ -89,6 +159,7 @@ async function main() {
   const sealIdentityHex = args.sealIdentityHex ?? deriveSealIdentityHex({
     datasetSha256,
     ownerAddress,
+    policyHash,
     recordedMonth: stepRecord.recordedMonth,
     requestId,
   });
@@ -113,6 +184,22 @@ async function main() {
     throw new Error('Refusing to store local-dev-fallback ciphertext on Walrus. Set MODI_SEAL_ENCRYPT_CMD for real Seal encryption, or pass --allow-local-dev-store for synthetic demos only.');
   }
 
+  const agentAudit = buildAgentAuditMemory({
+    datasetSha256,
+    memoryNamespace,
+    policyBlob,
+    policyHash,
+    policyPack,
+    stepRecord,
+  });
+  if (agentAudit.decision !== 'passed') {
+    throw new Error(`Agent privacy audit blocked upload: ${agentAudit.findings.map((finding) => finding.detail).join('; ')}`);
+  }
+  const agentAuditPath = path.join(cfg.outDir, 'agent_audit_memory.json');
+  await writeJson(agentAuditPath, agentAudit);
+  const agentAuditHash = hashJson(agentAudit);
+  const agentAuditBlob = await storeWalrusBlob(agentAuditPath, cfg);
+
   const receipt = {
     receiptVersion: '1.0.0',
     dataType: 'step_activity_record',
@@ -134,8 +221,21 @@ async function main() {
       pseudonymizedDatasetSha256: datasetSha256,
       encryptedDatasetSha256,
     },
+    policy: {
+      policyId: policyPack.policyId,
+      policyVersion: policyPack.policyVersion,
+      walrusBlobId: policyBlob.blobId,
+      sha256: policyHash,
+    },
+    agentMemory: {
+      namespace: memoryNamespace,
+      auditWalrusBlobId: agentAuditBlob.blobId,
+      auditSha256: agentAuditHash,
+      decision: agentAudit.decision,
+      riskLevel: agentAudit.riskLevel,
+    },
     agentVerification: {
-      status: 'passed',
+      status: agentAudit.decision,
       checks: [
         {
           name: 'forbidden_fields',
@@ -154,6 +254,11 @@ async function main() {
             ? 'Local dev encryption fallback was used. Replace with Seal SDK or CLI before testnet/mainnet storage.'
             : 'Seal encryption command produced the Walrus payload.',
         },
+        ...agentAudit.findings.map((finding) => ({
+          name: finding.name,
+          status: finding.status,
+          detail: finding.detail,
+        })),
       ],
     },
   };
@@ -170,6 +275,13 @@ async function main() {
     schemaVersion,
     ownerAddress,
     requestId,
+    policy: {
+      policyId: policyPack.policyId,
+      policyVersion: policyPack.policyVersion,
+      walrusBlobId: policyBlob.blobId,
+      walrusObjectId: policyBlob.objectId,
+      sha256: policyHash,
+    },
     dataset: {
       walrusBlobId: datasetBlob.blobId,
       walrusObjectId: datasetBlob.objectId,
@@ -180,6 +292,16 @@ async function main() {
       walrusBlobId: receiptBlob.blobId,
       walrusObjectId: receiptBlob.objectId,
       sha256: hashJson(receipt),
+    },
+    agentMemory: {
+      namespace: memoryNamespace,
+      audit: {
+        walrusBlobId: agentAuditBlob.blobId,
+        walrusObjectId: agentAuditBlob.objectId,
+        sha256: agentAuditHash,
+        decision: agentAudit.decision,
+        riskLevel: agentAudit.riskLevel,
+      },
     },
     encryption: {
       provider: 'seal',
@@ -209,6 +331,25 @@ async function main() {
   const manifestHash = hashJson(manifest);
   const manifestBlob = await storeWalrusBlob(manifestPath, cfg);
 
+  const workflowCheckpoint = buildWorkflowCheckpoint({
+    agentAuditBlob,
+    agentAuditHash,
+    datasetBlob,
+    manifestBlob,
+    manifestHash,
+    memoryNamespace,
+    policyBlob,
+    policyHash,
+    policyPack,
+    receiptBlob,
+    receiptHash: hashJson(receipt),
+    requestId,
+  });
+  const workflowCheckpointPath = path.join(cfg.outDir, 'workflow_checkpoint.json');
+  await writeJson(workflowCheckpointPath, workflowCheckpoint);
+  const workflowCheckpointHash = hashJson(workflowCheckpoint);
+  const workflowCheckpointBlob = await storeWalrusBlob(workflowCheckpointPath, cfg);
+
   const suiRegisterArgs = {
     packageId: sealPackageId,
     target: `${sealPackageId}::registry::register_data_asset`,
@@ -226,6 +367,30 @@ async function main() {
       seal_identity_hex: sealIdentityHex,
       seal_policy_object_id: sealPolicyObjectId,
     },
+    agentWorkflow: {
+      target: `${sealPackageId}::registry::register_agent_workflow_anchor`,
+      moveArgOrder: registerAgentWorkflowArgOrder,
+      moveArgsAsUtf8Vectors: {
+        policy_blob_id: policyBlob.blobId,
+        policy_hash: policyHash,
+        policy_version: policyPack.policyVersion,
+        agent_audit_blob_id: agentAuditBlob.blobId,
+        agent_audit_hash: agentAuditHash,
+        checkpoint_blob_id: workflowCheckpointBlob.blobId,
+        checkpoint_hash: workflowCheckpointHash,
+        memory_namespace: memoryNamespace,
+        latest_stage: workflowCheckpoint.stage,
+      },
+      moveArgs: {
+        agent_audit_passed: true,
+      },
+      typescriptHint:
+        'Pass the DataAsset object first, then bind moveArgsAsUtf8Vectors in moveArgOrder as vector<u8>, and pass agent_audit_passed as a bool.',
+    },
+    sealApproveWithAgentWorkflow: {
+      target: `${sealPackageId}::registry::seal_approve_with_agent_workflow`,
+      requiredObjects: ['AccessGrant', 'ConsentGrant', 'DataAsset', 'AgentWorkflowAnchor', 'Clock'],
+    },
     typescriptHint:
       "Bind moveArgsAsUtf8Vectors in moveArgOrder, then call tx.pure.vector('u8', Array.from(new TextEncoder().encode(value))) for each register_data_asset vector<u8> argument.",
   };
@@ -241,6 +406,16 @@ async function main() {
     walrus_manifest_hash: manifestHash,
     processing_receipt_blob_id: receiptBlob.blobId,
     processing_receipt_hash: hashJson(receipt),
+    privacy_policy_blob_id: policyBlob.blobId,
+    privacy_policy_hash: policyHash,
+    privacy_policy_version: policyPack.policyVersion,
+    agent_audit_blob_id: agentAuditBlob.blobId,
+    agent_audit_hash: agentAuditHash,
+    agent_audit_decision: agentAudit.decision,
+    agent_memory_namespace: memoryNamespace,
+    workflow_checkpoint_blob_id: workflowCheckpointBlob.blobId,
+    workflow_checkpoint_hash: workflowCheckpointHash,
+    workflow_stage: workflowCheckpoint.stage,
     schema_version: schemaVersion,
     processing_policy_version: processingPolicyVersion,
     encryption_provider: 'seal',
@@ -259,19 +434,28 @@ async function main() {
     files: {
       pseudonymizedDataset: datasetPath,
       encryptedDataset: encrypted.path,
+      policyPack: policyPath,
+      agentAuditMemory: agentAuditPath,
       processingReceipt: receiptPath,
       manifest: manifestPath,
+      workflowCheckpoint: workflowCheckpointPath,
       suiRegisterArgs: path.join(cfg.outDir, 'sui_register_data_asset_args.json'),
       platformSubmission: path.join(cfg.outDir, 'platform_submission.json'),
       ...(encrypted.keyPath ? { localDevKey: encrypted.keyPath } : {}),
     },
     walrus: {
+      policy: policyBlob,
       dataset: datasetBlob,
+      agentAudit: agentAuditBlob,
       processingReceipt: receiptBlob,
       manifest: manifestBlob,
+      workflowCheckpoint: workflowCheckpointBlob,
     },
     sui: suiRegisterArgs,
     manifestHash,
+    policyHash,
+    agentAuditHash,
+    workflowCheckpointHash,
   };
 
   await writeJson(summary.files.suiRegisterArgs, suiRegisterArgs);
@@ -282,11 +466,209 @@ async function main() {
     storedOnWalrus: cfg.store,
     encryptionMode: encrypted.mode,
     datasetBlobId: datasetBlob.blobId,
+    policyBlobId: policyBlob.blobId,
+    agentAuditBlobId: agentAuditBlob.blobId,
     manifestBlobId: manifestBlob.blobId,
     processingReceiptBlobId: receiptBlob.blobId,
+    workflowCheckpointBlobId: workflowCheckpointBlob.blobId,
     manifestHash,
+    policyHash,
+    agentAuditHash,
+    workflowCheckpointHash,
     outDir: cfg.outDir,
   }, null, 2));
+}
+
+function buildPolicyPack({ allowedUse, policyId, projectId }) {
+  return {
+    policyVersion: policyPackVersion,
+    policyId,
+    projectId,
+    dataType: 'step_activity_record',
+    purpose: 'Validate participation with minimized monthly step activity evidence.',
+    allowedUse,
+    transformPolicy: {
+      source: 'healthkit_daily_steps',
+      outputSchema: schemaVersion,
+      timeGranularity: 'month',
+      valueTransform: 'range_bands_and_counts',
+      allowedFields: stepAllowedFields,
+      forbiddenFields: stepForbiddenFields,
+      minimumSampleDays: 1,
+      exactValuePolicy: 'forbid_exact_dates_and_raw_step_counts',
+      locationPolicy: 'coarse_region_only',
+      identityPolicy: 'no_direct_identifier_in_dataset',
+    },
+    localAgentPolicy: {
+      modelClass: 'lightweight_on_device_or_rule_based_agent',
+      role: 'secondary_privacy_auditor',
+      finalAuthority: 'deterministic_validator',
+      instruction:
+        'Review the transformed payload for direct identifiers, exact health values, precise time/location leakage, schema drift, and consent-purpose mismatch before Seal encryption.',
+      outputSchema: {
+        decision: ['passed', 'blocked', 'needs_review'],
+        riskLevel: ['low', 'medium', 'high'],
+        findings: 'array of policy check results',
+      },
+    },
+    walrusMemoryPolicy: {
+      storeRawHealthData: false,
+      allowedMemoryTypes: [
+        'privacy_audit_summary',
+        'upload_checkpoint',
+        'policy_selection',
+      ],
+      note:
+        'Walrus Memory/MemWal should store compliance workflow memory only. Health payloads stay in the separate Seal-encrypted DataAsset flow.',
+    },
+  };
+}
+
+function buildAgentAuditMemory({
+  datasetSha256,
+  memoryNamespace,
+  policyBlob,
+  policyHash,
+  policyPack,
+  stepRecord,
+}) {
+  const findings = runLocalAgentAudit(stepRecord, policyPack);
+  const failed = findings.some((finding) => finding.status === 'failed');
+  const needsReview = findings.some((finding) => finding.status === 'needs_review');
+  const decision = failed ? 'blocked' : needsReview ? 'needs_review' : 'passed';
+
+  return {
+    memoryVersion: '1.0.0',
+    memoryType: 'privacy_audit_summary',
+    namespace: memoryNamespace,
+    policyId: policyPack.policyId,
+    policyVersion: policyPack.policyVersion,
+    policyWalrusBlobId: policyBlob.blobId,
+    policyHash,
+    dataType: 'step_activity_record',
+    schemaVersion,
+    datasetSha256,
+    createdAt: new Date().toISOString(),
+    decision,
+    riskLevel: decision === 'passed' ? 'low' : 'high',
+    findings,
+    recommendedAction: decision === 'passed' ? 'allow_upload' : 'block_upload',
+    memorySafety: {
+      rawHealthDataIncluded: false,
+      exactDatesIncluded: false,
+      rawStepCountsIncluded: false,
+      directIdentifiersIncluded: false,
+    },
+  };
+}
+
+function runLocalAgentAudit(stepRecord, policyPack) {
+  const findings = [];
+  const allowed = new Set(policyPack.transformPolicy.allowedFields);
+  const forbidden = new Set(policyPack.transformPolicy.forbiddenFields.map(normalizeKey));
+  const keys = Object.keys(stepRecord);
+  const disallowedKeys = keys.filter((key) => !allowed.has(key));
+
+  findings.push({
+    name: 'allow_list_schema',
+    status: disallowedKeys.length === 0 ? 'passed' : 'failed',
+    detail: disallowedKeys.length === 0
+      ? 'Transformed payload uses only policy allowed fields.'
+      : `Payload contains fields outside policy allow-list: ${disallowedKeys.join(', ')}`,
+  });
+
+  const forbiddenKeys = collectForbiddenKeys(stepRecord, forbidden);
+  findings.push({
+    name: 'forbidden_field_scan',
+    status: forbiddenKeys.length === 0 ? 'passed' : 'failed',
+    detail: forbiddenKeys.length === 0
+      ? 'No forbidden direct identifier, raw value, precise date, or location fields were found.'
+      : `Forbidden fields found: ${forbiddenKeys.join(', ')}`,
+  });
+
+  findings.push({
+    name: 'time_granularity',
+    status: /^\d{4}-\d{2}$/.test(stepRecord.recordedMonth) ? 'passed' : 'failed',
+    detail: 'Recorded time is represented at month granularity.',
+  });
+
+  findings.push({
+    name: 'raw_step_value_scan',
+    status: hasLikelyRawStepValues(stepRecord) ? 'failed' : 'passed',
+    detail: hasLikelyRawStepValues(stepRecord)
+      ? 'Payload appears to contain raw step-like numeric values.'
+      : 'Payload contains band counts and no raw daily step values.',
+  });
+
+  const knownUse = knownAllowedUses.has(policyPack.allowedUse);
+  findings.push({
+    name: 'purpose_minimization',
+    status: knownUse ? 'passed' : 'needs_review',
+    detail: knownUse
+      ? `Allowed use ${policyPack.allowedUse} is recognized and constrained by the policy pack allow-list.`
+      : `Allowed use ${policyPack.allowedUse} should be reviewed against project consent text.`,
+  });
+
+  findings.push({
+    name: 'walrus_memory_scope',
+    status: 'passed',
+    detail: 'Agent memory stores audit/checkpoint metadata only; health payload remains in the encrypted DataAsset flow.',
+  });
+
+  return findings;
+}
+
+function buildWorkflowCheckpoint({
+  agentAuditBlob,
+  agentAuditHash,
+  datasetBlob,
+  manifestBlob,
+  manifestHash,
+  memoryNamespace,
+  policyBlob,
+  policyHash,
+  policyPack,
+  receiptBlob,
+  receiptHash,
+  requestId,
+}) {
+  return {
+    checkpointVersion: '1.0.0',
+    checkpointType: 'agent_upload_workflow',
+    namespace: memoryNamespace,
+    stage: 'sui_registration_ready',
+    createdAt: new Date().toISOString(),
+    requestId,
+    policy: {
+      policyId: policyPack.policyId,
+      policyVersion: policyPack.policyVersion,
+      walrusBlobId: policyBlob.blobId,
+      sha256: policyHash,
+    },
+    artifacts: {
+      encryptedDataset: {
+        walrusBlobId: datasetBlob.blobId,
+        sha256: datasetBlob.sha256,
+      },
+      agentAuditMemory: {
+        walrusBlobId: agentAuditBlob.blobId,
+        sha256: agentAuditHash,
+      },
+      processingReceipt: {
+        walrusBlobId: receiptBlob.blobId,
+        sha256: receiptHash,
+      },
+      dataManifest: {
+        walrusBlobId: manifestBlob.blobId,
+        sha256: manifestHash,
+      },
+    },
+    nextAction: 'register_data_asset_and_agent_workflow_anchor_on_sui',
+    memorySafety: {
+      rawHealthDataIncluded: false,
+      healthPayloadIncluded: false,
+    },
+  };
 }
 
 function buildStepRecord(raw) {
@@ -596,14 +978,34 @@ function findObjectId(value, keyPath = []) {
   return undefined;
 }
 
-function deriveSealIdentityHex({ datasetSha256, ownerAddress, recordedMonth, requestId }) {
+function deriveSealIdentityHex({ datasetSha256, ownerAddress, policyHash, recordedMonth, requestId }) {
   return sha256(Buffer.from([
     'modi:seal:step_activity_record:v1',
     ownerAddress.toLowerCase(),
     requestId.toLowerCase(),
+    policyHash,
     recordedMonth,
     datasetSha256,
   ].join(':')));
+}
+
+function deriveMemoryNamespace({ ownerAddress, policyId, requestId }) {
+  const digest = sha256(Buffer.from([
+    'modi:agent-memory:v1',
+    ownerAddress.toLowerCase(),
+    requestId.toLowerCase(),
+    policyId,
+  ].join(':')));
+  return `modi-agent-memory-${digest.slice(0, 24)}`;
+}
+
+function assertPolicyAllowedFields(value, policyPack) {
+  const allowed = new Set(policyPack.transformPolicy.allowedFields);
+  const keys = Object.keys(value);
+  const disallowed = keys.filter((key) => !allowed.has(key));
+  if (disallowed.length > 0) {
+    throw new Error(`Pseudonymized dataset contains fields outside policy allow-list: ${disallowed.join(', ')}`);
+  }
 }
 
 function assertNoProhibitedKeys(value, currentPath = '$') {
@@ -615,7 +1017,7 @@ function assertNoProhibitedKeys(value, currentPath = '$') {
   if (!value || typeof value !== 'object') return;
 
   for (const [key, child] of Object.entries(value)) {
-    const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normalized = normalizeKey(key);
     if (prohibitedRawKeys.has(normalized)) {
       throw new Error(`Prohibited field found at ${currentPath}.${key}`);
     }
@@ -623,11 +1025,46 @@ function assertNoProhibitedKeys(value, currentPath = '$') {
   }
 }
 
+function collectForbiddenKeys(value, forbidden, currentPath = '$') {
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) => collectForbiddenKeys(item, forbidden, `${currentPath}[${index}]`));
+  }
+
+  if (!value || typeof value !== 'object') return [];
+
+  const found = [];
+  for (const [key, child] of Object.entries(value)) {
+    const nextPath = `${currentPath}.${key}`;
+    if (forbidden.has(normalizeKey(key))) {
+      found.push(nextPath);
+    }
+    found.push(...collectForbiddenKeys(child, forbidden, nextPath));
+  }
+  return found;
+}
+
+function hasLikelyRawStepValues(value) {
+  if (Array.isArray(value)) return value.some(hasLikelyRawStepValues);
+  if (!value || typeof value !== 'object') return false;
+
+  for (const [key, child] of Object.entries(value)) {
+    if (normalizeKey(key).includes('step') && typeof child === 'number' && child > 100) {
+      return true;
+    }
+    if (hasLikelyRawStepValues(child)) return true;
+  }
+  return false;
+}
+
 function assertNoRawStepLeak(value) {
   const serialized = JSON.stringify(value);
   if (/"steps"\s*:/.test(serialized) || /"date"\s*:/.test(serialized)) {
     throw new Error('Pseudonymized dataset must not contain raw steps or date fields.');
   }
+}
+
+function normalizeKey(value) {
+  return String(value).toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 function requiredString(value, name) {
@@ -739,6 +1176,10 @@ Options:
   --out-dir <path>                  Output directory. Default: infra/walrus/build/step-upload
   --owner <0x...>                   User Sui address. Defaults to input.ownerAddress.
   --request-id <0x...>              DataRequest object ID. Defaults to input.requestId.
+  --project-id <id>                 Research project ID for policy/memory artifacts.
+  --policy-id <id>                  Policy pack ID. Default: step_monthly_reward_policy_v1.
+  --allowed-use <value>             Consent purpose/use class. Default: reward_validation.
+  --memory-namespace <value>        Agent memory namespace. Defaults to deterministic non-PII namespace.
   --seal-package-id <0x...>         Package containing registry::seal_approve.
   --seal-policy-object-id <0x...>   Access policy object ID recorded in AccessGrant.
   --seal-identity-hex <hex>         32-byte Seal identity. Defaults to deterministic dataset identity.
@@ -753,6 +1194,10 @@ Environment:
   MODI_SEAL_ENCRYPT_CMD             Optional command template for real Seal encryption.
                                     Placeholders: {input} {output} {packageId} {sealIdentityHex}
                                     {policyObjectId} {threshold} {keyServers}
+  MODI_PROJECT_ID                   Optional project ID for policy/memory artifacts.
+  MODI_POLICY_ID                    Optional policy pack ID.
+  MODI_ALLOWED_USE                  Optional allowed use class.
+  MODI_AGENT_MEMORY_NAMESPACE       Optional Walrus Memory namespace.
   WALRUS_BIN                        Optional Walrus binary name/path.
 `);
 }

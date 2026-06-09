@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modi.local/schemas/agent_audit_memory.schema.json",
+  "title": "MODi Agent Audit Memory",
+  "description": "Persistent agent memory artifact recording privacy audit decisions without raw health data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "memoryVersion",
+    "memoryType",
+    "namespace",
+    "policyId",
+    "policyVersion",
+    "policyWalrusBlobId",
+    "policyHash",
+    "dataType",
+    "schemaVersion",
+    "datasetSha256",
+    "createdAt",
+    "decision",
+    "riskLevel",
+    "findings",
+    "recommendedAction",
+    "memorySafety"
+  ],
+  "properties": {
+    "memoryVersion": { "type": "string", "const": "1.0.0" },
+    "memoryType": { "type": "string", "const": "privacy_audit_summary" },
+    "namespace": { "type": "string", "minLength": 1 },
+    "policyId": { "type": "string", "minLength": 1 },
+    "policyVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "policyWalrusBlobId": { "type": "string", "minLength": 1 },
+    "policyHash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "dataType": { "type": "string", "const": "step_activity_record" },
+    "schemaVersion": { "type": "string", "minLength": 1 },
+    "datasetSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "decision": { "type": "string", "enum": ["passed", "blocked", "needs_review"] },
+    "riskLevel": { "type": "string", "enum": ["low", "medium", "high"] },
+    "findings": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status", "detail"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "status": { "type": "string", "enum": ["passed", "failed", "needs_review"] },
+          "detail": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "recommendedAction": { "type": "string", "enum": ["allow_upload", "block_upload"] },
+    "memorySafety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rawHealthDataIncluded",
+        "exactDatesIncluded",
+        "rawStepCountsIncluded",
+        "directIdentifiersIncluded"
+      ],
+      "properties": {
+        "rawHealthDataIncluded": { "type": "boolean", "const": false },
+        "exactDatesIncluded": { "type": "boolean", "const": false },
+        "rawStepCountsIncluded": { "type": "boolean", "const": false },
+        "directIdentifiersIncluded": { "type": "boolean", "const": false }
+      }
+    }
+  }
+}

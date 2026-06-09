@@ -11,8 +11,10 @@
     "schemaVersion",
     "ownerAddress",
     "requestId",
+    "policy",
     "dataset",
     "processingReceipt",
+    "agentMemory",
     "encryption",
     "metadata",
     "retention"
@@ -38,6 +40,18 @@
       "type": "string",
       "pattern": "^0x[0-9a-fA-F]{1,64}$"
     },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policyId", "policyVersion", "walrusBlobId", "walrusObjectId", "sha256"],
+      "properties": {
+        "policyId": { "type": "string", "minLength": 1 },
+        "policyVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "walrusBlobId": { "type": "string", "minLength": 1 },
+        "walrusObjectId": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
     "dataset": {
       "type": "object",
       "additionalProperties": false,
@@ -57,6 +71,26 @@
         "walrusBlobId": { "type": "string", "minLength": 1 },
         "walrusObjectId": { "type": "string", "minLength": 1 },
         "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "agentMemory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["namespace", "audit"],
+      "properties": {
+        "namespace": { "type": "string", "minLength": 1 },
+        "audit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["walrusBlobId", "walrusObjectId", "sha256", "decision", "riskLevel"],
+          "properties": {
+            "walrusBlobId": { "type": "string", "minLength": 1 },
+            "walrusObjectId": { "type": "string", "minLength": 1 },
+            "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "decision": { "type": "string", "enum": ["passed", "blocked", "needs_review"] },
+            "riskLevel": { "type": "string", "enum": ["low", "medium", "high"] }
+          }
+        }
       }
     },
     "encryption": {

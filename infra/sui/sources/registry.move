@@ -16,6 +16,8 @@ const EAssetMismatch: u64 = 7;
 const EInvalidExpiry: u64 = 8;
 const EInvalidSealIdentity: u64 = 9;
 const ESealIdentityMismatch: u64 = 10;
+const EInvalidWorkflowMemory: u64 = 11;
+const EAgentAuditNotPassed: u64 = 12;
 
 public struct DataRequest has key, store {
     id: UID,
@@ -36,6 +38,22 @@ public struct DataAsset has key, store {
     schema_version: vector<u8>,
     processing_policy_version: vector<u8>,
     processing_receipt_blob_id: vector<u8>,
+}
+
+public struct AgentWorkflowAnchor has key, store {
+    id: UID,
+    owner: address,
+    data_asset_id: ID,
+    policy_blob_id: vector<u8>,
+    policy_hash: vector<u8>,
+    policy_version: vector<u8>,
+    agent_audit_blob_id: vector<u8>,
+    agent_audit_hash: vector<u8>,
+    checkpoint_blob_id: vector<u8>,
+    checkpoint_hash: vector<u8>,
+    memory_namespace: vector<u8>,
+    latest_stage: vector<u8>,
+    agent_audit_passed: bool,
 }
 
 public struct ConsentGrant has key, store {
@@ -85,6 +103,25 @@ public struct DataRequestCreated has copy, drop {
 public struct DataAssetRegistered has copy, drop {
     asset_id: ID,
     owner: address,
+}
+
+public struct AgentWorkflowAnchored has copy, drop {
+    anchor_id: ID,
+    data_asset_id: ID,
+    owner: address,
+    policy_hash: vector<u8>,
+    agent_audit_hash: vector<u8>,
+    checkpoint_hash: vector<u8>,
+    memory_namespace: vector<u8>,
+    latest_stage: vector<u8>,
+}
+
+public struct AgentWorkflowCheckpointUpdated has copy, drop {
+    anchor_id: ID,
+    data_asset_id: ID,
+    owner: address,
+    checkpoint_hash: vector<u8>,
+    latest_stage: vector<u8>,
 }
 
 public struct ConsentGranted has copy, drop {
@@ -203,6 +240,87 @@ public fun register_data_asset(
     asset
 }
 
+public fun register_agent_workflow_anchor(
+    asset: &DataAsset,
+    policy_blob_id: vector<u8>,
+    policy_hash: vector<u8>,
+    policy_version: vector<u8>,
+    agent_audit_blob_id: vector<u8>,
+    agent_audit_hash: vector<u8>,
+    checkpoint_blob_id: vector<u8>,
+    checkpoint_hash: vector<u8>,
+    memory_namespace: vector<u8>,
+    latest_stage: vector<u8>,
+    agent_audit_passed: bool,
+    ctx: &mut TxContext,
+): AgentWorkflowAnchor {
+    assert!(asset.owner == ctx.sender(), EUnauthorized);
+    assert!(agent_audit_passed, EAgentAuditNotPassed);
+    assert!(policy_blob_id.length() > 0, EInvalidWorkflowMemory);
+    assert!(policy_hash.length() > 0, EInvalidWorkflowMemory);
+    assert!(policy_version.length() > 0, EInvalidWorkflowMemory);
+    assert!(agent_audit_blob_id.length() > 0, EInvalidWorkflowMemory);
+    assert!(agent_audit_hash.length() > 0, EInvalidWorkflowMemory);
+    assert!(checkpoint_blob_id.length() > 0, EInvalidWorkflowMemory);
+    assert!(checkpoint_hash.length() > 0, EInvalidWorkflowMemory);
+    assert!(memory_namespace.length() > 0, EInvalidWorkflowMemory);
+    assert!(latest_stage.length() > 0, EInvalidWorkflowMemory);
+
+    let anchor = AgentWorkflowAnchor {
+        id: object::new(ctx),
+        owner: ctx.sender(),
+        data_asset_id: object::id(asset),
+        policy_blob_id,
+        policy_hash,
+        policy_version,
+        agent_audit_blob_id,
+        agent_audit_hash,
+        checkpoint_blob_id,
+        checkpoint_hash,
+        memory_namespace,
+        latest_stage,
+        agent_audit_passed,
+    };
+
+    event::emit(AgentWorkflowAnchored {
+        anchor_id: object::id(&anchor),
+        data_asset_id: anchor.data_asset_id,
+        owner: anchor.owner,
+        policy_hash: anchor.policy_hash,
+        agent_audit_hash: anchor.agent_audit_hash,
+        checkpoint_hash: anchor.checkpoint_hash,
+        memory_namespace: anchor.memory_namespace,
+        latest_stage: anchor.latest_stage,
+    });
+
+    anchor
+}
+
+public fun update_agent_workflow_checkpoint(
+    anchor: &mut AgentWorkflowAnchor,
+    checkpoint_blob_id: vector<u8>,
+    checkpoint_hash: vector<u8>,
+    latest_stage: vector<u8>,
+    ctx: &mut TxContext,
+) {
+    assert!(anchor.owner == ctx.sender(), EUnauthorized);
+    assert!(checkpoint_blob_id.length() > 0, EInvalidWorkflowMemory);
+    assert!(checkpoint_hash.length() > 0, EInvalidWorkflowMemory);
+    assert!(latest_stage.length() > 0, EInvalidWorkflowMemory);
+
+    anchor.checkpoint_blob_id = checkpoint_blob_id;
+    anchor.checkpoint_hash = checkpoint_hash;
+    anchor.latest_stage = latest_stage;
+
+    event::emit(AgentWorkflowCheckpointUpdated {
+        anchor_id: object::id(anchor),
+        data_asset_id: anchor.data_asset_id,
+        owner: anchor.owner,
+        checkpoint_hash: anchor.checkpoint_hash,
+        latest_stage: anchor.latest_stage,
+    });
+}
+
 public fun grant_consent(
     request: &DataRequest,
     asset: &DataAsset,
@@ -310,6 +428,22 @@ public fun seal_approve(
     assert!(consent.data_asset_id == object::id(asset), EAssetMismatch);
 }
 
+/// Stronger Seal policy hook for agentic workflows. It keeps the existing
+/// consent/access checks and additionally requires an anchored, passed agent
+/// audit memory for the same data asset.
+public fun seal_approve_with_agent_workflow(
+    id: vector<u8>,
+    access_grant: &AccessGrant,
+    consent: &ConsentGrant,
+    asset: &DataAsset,
+    workflow: &AgentWorkflowAnchor,
+    clock: &Clock,
+) {
+    seal_approve(id, access_grant, consent, asset, clock);
+    assert!(workflow.data_asset_id == object::id(asset), EAssetMismatch);
+    assert!(workflow.agent_audit_passed, EAgentAuditNotPassed);
+}
+
 public fun revoke_access_grant(access_grant: &mut AccessGrant, ctx: &mut TxContext) {
     assert!(access_grant.researcher == ctx.sender(), EUnauthorized);
     access_grant.revoked = true;
@@ -401,6 +535,18 @@ public fun data_request_expires_at_ms(request: &DataRequest): u64 {
 
 public fun data_asset_owner(asset: &DataAsset): address {
     asset.owner
+}
+
+public fun agent_workflow_data_asset_id(anchor: &AgentWorkflowAnchor): ID {
+    anchor.data_asset_id
+}
+
+public fun agent_workflow_latest_stage(anchor: &AgentWorkflowAnchor): vector<u8> {
+    anchor.latest_stage
+}
+
+public fun agent_workflow_audit_passed(anchor: &AgentWorkflowAnchor): bool {
+    anchor.agent_audit_passed
 }
 
 public fun consent_user(consent: &ConsentGrant): address {

@@ -13,6 +13,7 @@ This package contains the first MVP Move module for MODi's consent, access, and 
 | `DataRequest` | Researcher-created request metadata and reward terms |
 | `RewardEscrow` | SUI reward locked for the request |
 | `DataAsset` | User-owned reference to encrypted Walrus blobs |
+| `AgentWorkflowAnchor` | User-owned link between a `DataAsset` and Walrus policy/audit/checkpoint memory artifacts |
 | `ConsentGrant` | User approval for a request and data asset |
 | `AccessGrant` | Researcher permission reference for a Seal identity and policy object |
 | `AccessLog` | Onchain access audit object |
@@ -26,9 +27,10 @@ Expected MVP usage:
 - Researcher creates `DataRequest` and shares it.
 - Researcher keeps `RewardEscrow` until reward payout.
 - User creates `DataAsset` and shares it after Walrus upload.
+- User creates `AgentWorkflowAnchor` for the same `DataAsset` after policy pack, agent audit memory, and workflow checkpoint blobs are stored on Walrus.
 - User creates `ConsentGrant` and shares it so the researcher can read the consent state.
 - Researcher creates `AccessGrant` with the Seal identity used for encryption.
-- Seal key servers evaluate `registry::seal_approve` against `AccessGrant`, `ConsentGrant`, `DataAsset`, and `Clock` before releasing decryption key shares.
+- Seal key servers evaluate `registry::seal_approve` or the stricter `registry::seal_approve_with_agent_workflow` before releasing decryption key shares.
 - Keep `AccessGrant` owned by the researcher wallet for the MVP flow.
 
 The module enforces sender checks for sensitive mutations:
@@ -53,6 +55,31 @@ registry::seal_approve(
 ```
 
 The approval function checks that the identity matches, the access grant and consent are active, both are unexpired, and the consent still points to the data asset.
+
+For the hackathon agent-memory flow, prefer:
+
+```move
+registry::seal_approve_with_agent_workflow(
+    id,
+    access_grant,
+    consent,
+    data_asset,
+    agent_workflow_anchor,
+    clock,
+)
+```
+
+This keeps the existing Seal identity and consent checks, then additionally verifies that the `AgentWorkflowAnchor` belongs to the same `DataAsset` and records a passed local privacy-agent audit.
+
+## Agent Memory Anchoring
+
+`AgentWorkflowAnchor` stores only public Walrus references and hashes for:
+
+- `policy_pack.json`
+- `agent_audit_memory.json`
+- `workflow_checkpoint.json`
+
+It does not store raw health data or decrypted payloads. The encrypted health payload remains in the separate `DataAsset` Walrus blob.
 
 ## Verification
 

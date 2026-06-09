@@ -18,9 +18,12 @@ Raw input shape:
 
 Walrus upload shape:
 
+- public `policy_pack`
 - encrypted `step_activity_record`
+- public `agent_audit_memory`
 - public `data_manifest`
 - public `processing_receipt`
+- public `workflow_checkpoint`
 
 The encrypted dataset excludes exact dates and exact step counts. It keeps only:
 
@@ -47,8 +50,11 @@ Important files:
 |---|---|
 | `step_activity_record.json` | Pseudonymized dataset before encryption |
 | `step_activity_record.seal.localdev.json` | Local encrypted payload placeholder |
+| `policy_pack.json` | Research-purpose transform policy for the local privacy agent |
+| `agent_audit_memory.json` | Agent privacy audit memory without raw health data |
 | `processing_receipt.json` | Filtering and pseudonymization proof |
 | `data_manifest.json` | Walrus/Sui/Seal references and hashes |
+| `workflow_checkpoint.json` | Long-running agent workflow state for recovery/coordination |
 | `sui_register_data_asset_args.json` | Arguments for `registry::register_data_asset` |
 | `platform_submission.json` | Shape that web/API can store in `participant_submissions` |
 
@@ -86,6 +92,38 @@ walrus store <file> --epochs <n> --context <testnet|mainnet> --json
 
 The script refuses `--store` when it is still using `local-dev-fallback` encryption. For a synthetic-only demo, pass `--allow-local-dev-store`; do not use that flag with real user data.
 
+## Agent Memory Boundary
+
+MODi does not use Walrus Memory/MemWal as a health-data memory store.
+
+Use the normal Seal-encrypted `DataAsset` flow for health payloads:
+
+```text
+HealthKit data -> local transform -> Seal encryption -> Walrus dataset blob -> Sui DataAsset
+```
+
+Use agent memory artifacts only for compliance workflow state:
+
+```text
+policy_pack -> local privacy audit -> agent_audit_memory -> workflow_checkpoint
+```
+
+Allowed agent memory content:
+
+- policy IDs and policy hashes
+- audit decisions and findings
+- upload stage/checkpoint references
+- Walrus blob IDs and hashes for generated artifacts
+
+Forbidden agent memory content:
+
+- raw HealthKit samples
+- exact dates or exact health values
+- direct identifiers
+- decrypted health payloads
+
+This keeps the hackathon "persistent agent memory" layer useful without making it the regulated health-data store.
+
 ## Sui Registration
 
 After Walrus storage succeeds, call:
@@ -103,6 +141,26 @@ After Walrus storage succeeds, call:
 
 All six arguments are `vector<u8>` UTF-8 bytes.
 The generated `sui_register_data_asset_args.json` includes `moveArgOrder`; bind the values in that exact order when building a PTB or TypeScript transaction.
+
+Then attach the agent workflow memory to the created `DataAsset`:
+
+```text
+<package_id>::registry::register_agent_workflow_anchor(
+  data_asset,
+  policy_blob_id,
+  policy_hash,
+  policy_version,
+  agent_audit_blob_id,
+  agent_audit_hash,
+  checkpoint_blob_id,
+  checkpoint_hash,
+  memory_namespace,
+  latest_stage,
+  agent_audit_passed
+)
+```
+
+The `AgentWorkflowAnchor` is the onchain link between the encrypted health dataset and the persistent agent memory artifacts. Seal key servers can use the stricter `seal_approve_with_agent_workflow` hook to require both consent/access validity and a passed agent audit.
 
 For access, encrypt with the same `sealIdentityHex`, then create:
 

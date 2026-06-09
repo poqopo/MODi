@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modi.local/schemas/workflow_checkpoint.schema.json",
+  "title": "MODi Agent Workflow Checkpoint",
+  "description": "Persistent workflow state for long-running health data consent agents.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "checkpointVersion",
+    "checkpointType",
+    "namespace",
+    "stage",
+    "createdAt",
+    "requestId",
+    "policy",
+    "artifacts",
+    "nextAction",
+    "memorySafety"
+  ],
+  "properties": {
+    "checkpointVersion": { "type": "string", "const": "1.0.0" },
+    "checkpointType": { "type": "string", "const": "agent_upload_workflow" },
+    "namespace": { "type": "string", "minLength": 1 },
+    "stage": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "requestId": { "type": "string", "pattern": "^0x[0-9a-fA-F]{1,64}$" },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policyId", "policyVersion", "walrusBlobId", "sha256"],
+      "properties": {
+        "policyId": { "type": "string", "minLength": 1 },
+        "policyVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "walrusBlobId": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["encryptedDataset", "agentAuditMemory", "processingReceipt", "dataManifest"],
+      "properties": {
+        "encryptedDataset": { "$ref": "#/$defs/artifact" },
+        "agentAuditMemory": { "$ref": "#/$defs/artifact" },
+        "processingReceipt": { "$ref": "#/$defs/artifact" },
+        "dataManifest": { "$ref": "#/$defs/artifact" }
+      }
+    },
+    "nextAction": { "type": "string", "minLength": 1 },
+    "memorySafety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rawHealthDataIncluded", "healthPayloadIncluded"],
+      "properties": {
+        "rawHealthDataIncluded": { "type": "boolean", "const": false },
+        "healthPayloadIncluded": { "type": "boolean", "const": false }
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["walrusBlobId", "sha256"],
+      "properties": {
+        "walrusBlobId": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  }
+}

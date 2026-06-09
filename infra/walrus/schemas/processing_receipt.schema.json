@@ -14,6 +14,8 @@
     "removedFields",
     "pseudonymization",
     "hashes",
+    "policy",
+    "agentMemory",
     "agentVerification"
   ],
   "properties": {
@@ -55,12 +57,35 @@
         "encryptedDatasetSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
       }
     },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policyId", "policyVersion", "walrusBlobId", "sha256"],
+      "properties": {
+        "policyId": { "type": "string", "minLength": 1 },
+        "policyVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "walrusBlobId": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "agentMemory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["namespace", "auditWalrusBlobId", "auditSha256", "decision", "riskLevel"],
+      "properties": {
+        "namespace": { "type": "string", "minLength": 1 },
+        "auditWalrusBlobId": { "type": "string", "minLength": 1 },
+        "auditSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "decision": { "type": "string", "enum": ["passed", "blocked", "needs_review"] },
+        "riskLevel": { "type": "string", "enum": ["low", "medium", "high"] }
+      }
+    },
     "agentVerification": {
       "type": "object",
       "additionalProperties": false,
       "required": ["status", "checks"],
       "properties": {
-        "status": { "type": "string", "enum": ["passed", "failed"] },
+        "status": { "type": "string", "enum": ["passed", "blocked", "needs_review"] },
         "checks": {
           "type": "array",
           "minItems": 1,
@@ -70,7 +95,7 @@
             "required": ["name", "status"],
             "properties": {
               "name": { "type": "string" },
-              "status": { "type": "string", "enum": ["passed", "failed"] },
+              "status": { "type": "string", "enum": ["passed", "failed", "needs_review"] },
               "detail": { "type": "string" }
             }
           }

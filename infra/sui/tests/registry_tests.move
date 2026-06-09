@@ -27,6 +27,33 @@ fun registers_data_asset_with_sender_as_owner() {
 
     assert!(registry::data_asset_owner(&asset) == USER);
 
+    let mut workflow = registry::register_agent_workflow_anchor(
+        &asset,
+        b"policy_blob",
+        b"policy_hash",
+        b"step-policy-v1",
+        b"agent_audit_blob",
+        b"agent_audit_hash",
+        b"checkpoint_blob",
+        b"checkpoint_hash",
+        b"user:step_upload",
+        b"sui_registration_ready",
+        true,
+        scenario.ctx(),
+    );
+    assert!(registry::agent_workflow_data_asset_id(&workflow) == object::id(&asset));
+    assert!(registry::agent_workflow_audit_passed(&workflow));
+
+    registry::update_agent_workflow_checkpoint(
+        &mut workflow,
+        b"checkpoint_blob_2",
+        b"checkpoint_hash_2",
+        b"access_grant_pending",
+        scenario.ctx(),
+    );
+    assert!(registry::agent_workflow_latest_stage(&workflow) == b"access_grant_pending");
+
+    destroy(workflow);
     destroy(asset);
     scenario.end();
 }
@@ -56,6 +83,20 @@ fun creates_request_consent_access_log_and_reward() {
         b"1.0.0",
         b"mvp-health-v1",
         b"receipt_blob",
+        scenario.ctx(),
+    );
+    let workflow = registry::register_agent_workflow_anchor(
+        &asset,
+        b"policy_blob",
+        b"policy_hash",
+        b"step-policy-v1",
+        b"agent_audit_blob",
+        b"agent_audit_hash",
+        b"checkpoint_blob",
+        b"checkpoint_hash",
+        b"user:step_upload",
+        b"sui_registration_ready",
+        true,
         scenario.ctx(),
     );
     let consent = registry::grant_consent(
@@ -88,6 +129,14 @@ fun creates_request_consent_access_log_and_reward() {
         &asset,
         &clock,
     );
+    registry::seal_approve_with_agent_workflow(
+        b"step_upload_policy_identity",
+        &access_grant,
+        &consent,
+        &asset,
+        &workflow,
+        &clock,
+    );
     let access_log = registry::record_data_access(
         &access_grant,
         &consent,
@@ -103,6 +152,7 @@ fun creates_request_consent_access_log_and_reward() {
     destroy(access_log);
     destroy(access_grant);
     destroy(consent);
+    destroy(workflow);
     destroy(asset);
     destroy(request);
     clock.destroy_for_testing();

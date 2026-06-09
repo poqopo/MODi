@@ -74,6 +74,28 @@ Walrus에 저장되는 암호화 payload는 다음 범주형 데이터만 포함
 
 `infra/walrus/scripts/prepare_step_upload.mjs`가 이 변환, receipt 생성, Seal 암호화 준비, Walrus 저장, Sui 등록 인자 생성을 담당한다.
 
+## Agent Memory 저장 범위
+
+해커톤용 agentic workflow에서는 Walrus Memory 또는 MemWal을 health data memory로 쓰지 않는다. Agent memory는 장기 실행 workflow를 복구하고 감사하기 위한 compliance memory로 제한한다.
+
+Agent memory에 저장할 수 있는 값:
+
+- 연구별 `policy_pack` blob ID와 hash
+- local privacy agent의 audit decision, risk level, findings
+- upload checkpoint stage와 next action
+- encrypted dataset, manifest, receipt의 Walrus blob ID와 hash
+- Sui `DataAsset` 또는 `AgentWorkflowAnchor` 참조
+
+Agent memory에 저장하면 안 되는 값:
+
+- HealthKit 원본 sample
+- 정확한 날짜와 정확한 건강 수치
+- 직접 식별자 또는 디바이스 고유 식별자
+- 복호화된 health payload
+- Seal local development key
+
+즉, health payload는 `Seal -> Walrus DataAsset` 경로로만 저장하고, Agent memory는 policy/audit/checkpoint만 기억한다.
+
 ## Sui 기록 제한
 
 Sui에는 다음만 기록한다.

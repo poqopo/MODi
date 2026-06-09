@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://modi.local/schemas/policy_pack.schema.json",
+  "title": "MODi Agent Policy Pack",
+  "description": "Research-purpose policy artifact used by the local privacy agent before Seal encryption and Walrus upload.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "policyVersion",
+    "policyId",
+    "projectId",
+    "dataType",
+    "purpose",
+    "allowedUse",
+    "transformPolicy",
+    "localAgentPolicy",
+    "walrusMemoryPolicy"
+  ],
+  "properties": {
+    "policyVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "policyId": { "type": "string", "minLength": 1 },
+    "projectId": { "type": "string", "minLength": 1 },
+    "dataType": { "type": "string", "const": "step_activity_record" },
+    "purpose": { "type": "string", "minLength": 1 },
+    "allowedUse": { "type": "string", "minLength": 1 },
+    "transformPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "outputSchema",
+        "timeGranularity",
+        "valueTransform",
+        "allowedFields",
+        "forbiddenFields",
+        "minimumSampleDays",
+        "exactValuePolicy",
+        "locationPolicy",
+        "identityPolicy"
+      ],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "outputSchema": { "type": "string", "minLength": 1 },
+        "timeGranularity": { "type": "string", "const": "month" },
+        "valueTransform": { "type": "string", "const": "range_bands_and_counts" },
+        "allowedFields": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "forbiddenFields": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "minimumSampleDays": { "type": "integer", "minimum": 1 },
+        "exactValuePolicy": { "type": "string", "minLength": 1 },
+        "locationPolicy": { "type": "string", "minLength": 1 },
+        "identityPolicy": { "type": "string", "minLength": 1 }
+      }
+    },
+    "localAgentPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelClass", "role", "finalAuthority", "instruction", "outputSchema"],
+      "properties": {
+        "modelClass": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "finalAuthority": { "type": "string", "minLength": 1 },
+        "instruction": { "type": "string", "minLength": 1 },
+        "outputSchema": { "type": "object" }
+      }
+    },
+    "walrusMemoryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["storeRawHealthData", "allowedMemoryTypes", "note"],
+      "properties": {
+        "storeRawHealthData": { "type": "boolean", "const": false },
+        "allowedMemoryTypes": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
