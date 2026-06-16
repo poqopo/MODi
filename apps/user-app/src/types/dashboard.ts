@@ -30,6 +30,16 @@ export type ResearchRequest = {
   expiresAt: string
   matchScore: number
   participants: string
+  policyPackBlobId?: string | null
+  policyPackHash?: string | null
+  policyPackObjectId?: string | null
+  policyPackVersion?: string | null
+  securityMemoryBlobId?: string | null
+  securityMemoryHash?: string | null
+  securityMemoryObjectId?: string | null
+  securityMemoryUpdatedAt?: string | null
+  securityMemoryVersion?: string | null
+  sealPolicyId?: string | null
   status: string
 }
 

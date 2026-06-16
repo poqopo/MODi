@@ -20,7 +20,7 @@ const asleepDeepValue = 4
 const developmentFallbackSnapshot = {
   bodyMassKg: 68,
   heartRateBpm: 72,
-  heightCm: 174,
+  heightCm: 180,
   restingEnergyKcal: 1420,
   sleepDeepMinutes: 126,
   sleepTotalMinutes: 432,

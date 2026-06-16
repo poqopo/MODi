@@ -409,9 +409,64 @@ public fun create_access_grant(
     access_grant
 }
 
+public fun grant_access_to_request_researcher(
+    request: &DataRequest,
+    consent: &ConsentGrant,
+    asset: &DataAsset,
+    seal_identity: vector<u8>,
+    seal_policy_object_id: ID,
+    expires_at_ms: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): AccessGrant {
+    let now_ms = clock.timestamp_ms();
+    assert!(seal_identity.length() > 0, EInvalidSealIdentity);
+    assert!(request.active, EInactiveRequest);
+    assert!(request.expires_at_ms > now_ms, EExpired);
+    assert!(asset.owner == ctx.sender(), EUnauthorized);
+    assert!(consent.user == ctx.sender(), EUnauthorized);
+    assert!(consent.request_id == object::id(request), ERequestMismatch);
+    assert!(!consent.revoked, EConsentRevoked);
+    assert!(consent.expires_at_ms > now_ms, EExpired);
+    assert!(consent.data_asset_id == object::id(asset), EAssetMismatch);
+    assert!(expires_at_ms > now_ms, EExpired);
+    assert!(expires_at_ms <= consent.expires_at_ms, EInvalidExpiry);
+
+    let access_grant = AccessGrant {
+        id: object::new(ctx),
+        researcher: request.researcher,
+        consent_id: object::id(consent),
+        seal_identity,
+        seal_policy_object_id,
+        expires_at_ms,
+        revoked: false,
+    };
+
+    event::emit(AccessGranted {
+        access_grant_id: object::id(&access_grant),
+        consent_id: access_grant.consent_id,
+        researcher: access_grant.researcher,
+        seal_identity: access_grant.seal_identity,
+        seal_policy_object_id,
+        expires_at_ms,
+    });
+
+    access_grant
+}
+
 /// Seal key servers evaluate this function before releasing decryption key shares.
 /// The Seal identity is the SDK `id` bytes used when encrypting the Walrus dataset.
-public fun seal_approve(
+entry fun seal_approve(
+    id: vector<u8>,
+    access_grant: &AccessGrant,
+    consent: &ConsentGrant,
+    asset: &DataAsset,
+    clock: &Clock,
+) {
+    assert_seal_access(id, access_grant, consent, asset, clock);
+}
+
+fun assert_seal_access(
     id: vector<u8>,
     access_grant: &AccessGrant,
     consent: &ConsentGrant,
@@ -431,7 +486,7 @@ public fun seal_approve(
 /// Stronger Seal policy hook for agentic workflows. It keeps the existing
 /// consent/access checks and additionally requires an anchored, passed agent
 /// audit memory for the same data asset.
-public fun seal_approve_with_agent_workflow(
+entry fun seal_approve_with_agent_workflow(
     id: vector<u8>,
     access_grant: &AccessGrant,
     consent: &ConsentGrant,
@@ -439,7 +494,32 @@ public fun seal_approve_with_agent_workflow(
     workflow: &AgentWorkflowAnchor,
     clock: &Clock,
 ) {
-    seal_approve(id, access_grant, consent, asset, clock);
+    assert_seal_access(id, access_grant, consent, asset, clock);
+    assert!(workflow.data_asset_id == object::id(asset), EAssetMismatch);
+    assert!(workflow.agent_audit_passed, EAgentAuditNotPassed);
+}
+
+#[test_only]
+public fun assert_seal_approve_for_testing(
+    id: vector<u8>,
+    access_grant: &AccessGrant,
+    consent: &ConsentGrant,
+    asset: &DataAsset,
+    clock: &Clock,
+) {
+    assert_seal_access(id, access_grant, consent, asset, clock);
+}
+
+#[test_only]
+public fun assert_seal_approve_with_agent_workflow_for_testing(
+    id: vector<u8>,
+    access_grant: &AccessGrant,
+    consent: &ConsentGrant,
+    asset: &DataAsset,
+    workflow: &AgentWorkflowAnchor,
+    clock: &Clock,
+) {
+    assert_seal_access(id, access_grant, consent, asset, clock);
     assert!(workflow.data_asset_id == object::id(asset), EAssetMismatch);
     assert!(workflow.agent_audit_passed, EAgentAuditNotPassed);
 }
@@ -559,6 +639,10 @@ public fun consent_revoked(consent: &ConsentGrant): bool {
 
 public fun access_grant_revoked(access_grant: &AccessGrant): bool {
     access_grant.revoked
+}
+
+public fun access_grant_researcher(access_grant: &AccessGrant): address {
+    access_grant.researcher
 }
 
 public fun access_grant_seal_identity(access_grant: &AccessGrant): vector<u8> {

@@ -111,6 +111,22 @@ fun creates_request_consent_access_log_and_reward() {
     assert!(registry::consent_user(&consent) == USER);
     assert!(!registry::consent_revoked(&consent));
 
+    let user_issued_access_grant = registry::grant_access_to_request_researcher(
+        &request,
+        &consent,
+        &asset,
+        b"user_issued_step_upload_policy_identity",
+        object::id(&asset),
+        800,
+        &clock,
+        scenario.ctx(),
+    );
+    assert!(registry::access_grant_researcher(&user_issued_access_grant) == RESEARCHER);
+    assert!(
+        registry::access_grant_seal_identity(&user_issued_access_grant) ==
+        b"user_issued_step_upload_policy_identity",
+    );
+
     scenario.next_tx(RESEARCHER);
     let access_grant = registry::create_access_grant(
         &request,
@@ -122,14 +138,14 @@ fun creates_request_consent_access_log_and_reward() {
         scenario.ctx(),
     );
     assert!(registry::access_grant_seal_identity(&access_grant) == b"step_upload_policy_identity");
-    registry::seal_approve(
+    registry::assert_seal_approve_for_testing(
         b"step_upload_policy_identity",
         &access_grant,
         &consent,
         &asset,
         &clock,
     );
-    registry::seal_approve_with_agent_workflow(
+    registry::assert_seal_approve_with_agent_workflow_for_testing(
         b"step_upload_policy_identity",
         &access_grant,
         &consent,
@@ -151,6 +167,7 @@ fun creates_request_consent_access_log_and_reward() {
 
     destroy(access_log);
     destroy(access_grant);
+    destroy(user_issued_access_grant);
     destroy(consent);
     destroy(workflow);
     destroy(asset);

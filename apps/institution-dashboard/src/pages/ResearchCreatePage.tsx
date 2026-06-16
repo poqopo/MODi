@@ -1,6 +1,8 @@
 import {
+  Check,
   ChevronDown,
   DatabaseZap,
+  Download,
   FileText,
   Layers3,
   Plus,
@@ -10,11 +12,14 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react'
+import { useDAppKit } from '@mysten/dapp-kit-react'
+import { ConnectButton } from '@mysten/dapp-kit-react/ui'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import type { ProjectView } from '@/lib/routes'
 import {
   createInstitutionForCurrentUser,
   createResearchProject,
@@ -24,12 +29,15 @@ import {
   type ApplicantStatus,
   type CreateResearchProjectInput,
   type DashboardApplicant,
+  type DashboardAgentMemoryArtifact,
   type DashboardData,
   type DashboardProject,
   type DashboardSettlement,
   type DashboardSubmission,
   type SettlementStatus,
 } from '@/services/institutionDashboard'
+import { createOnChainDataRequest } from '@/services/suiResearchRegistry'
+import { downloadWalrusBlob } from '@/services/walrusDownload'
 
 type ProjectMenuItem = {
   key: Exclude<ProjectView, 'home'>
@@ -38,98 +46,220 @@ type ProjectMenuItem = {
   icon: LucideIcon
 }
 
-type ProjectView = 'home' | 'participants' | 'datasets' | 'settlements'
-
 type Project = DashboardProject
 
 type ApplicantDecision = '승인' | '거절'
 type ApplicantRecord = DashboardApplicant
 type SubmissionRecord = DashboardSubmission
 type SettlementRecord = DashboardSettlement
+type RefreshDashboardOptions = {
+  showLoading?: boolean
+}
 
 const projectMenus: ProjectMenuItem[] = [
   { key: 'participants', label: '참여자 관리', detail: '신청자/참여자 관리', icon: Users },
-  { key: 'datasets', label: '데이터 세트', detail: 'Walrus/Seal 접근', icon: DatabaseZap },
+  { key: 'datasets', label: '데이터 관리', detail: '헬스케어 데이터 다운로드', icon: DatabaseZap },
   { key: 'settlements', label: '보상/정산', detail: 'RewardEscrow 지급', icon: Wallet },
 ]
 
 const schemaRows = [
   { field: 'ageRange', source: 'Profile', policy: '연령대만 저장', enabled: true },
-  { field: 'activityBand', source: 'Apple Health', policy: '걸음/운동 시간 구간화', enabled: true },
-  { field: 'vo2MaxBand', source: 'Apple Health', policy: '정확 수치 제거', enabled: true },
-  { field: 'sleepRecoveryBand', source: 'Wearable', policy: '수면 단계 범주화', enabled: false },
   { field: 'recordedMonth', source: 'System', policy: '월 단위 시간', enabled: true },
 ]
 
-const dataCategories = ['걸음', '운동 시간', '활동 에너지', 'VO2 max', '기기 유형', '기록 월']
+type DataCategoryOption = {
+  detail: string
+  key: string
+  source: string
+}
+
+type DataCategoryGroup = {
+  label: string
+  options: DataCategoryOption[]
+}
+
+const dataCategoryGroups: DataCategoryGroup[] = [
+  {
+    label: '활동',
+    options: [
+      { key: '걸음', source: 'Apple Health', detail: '일별 걸음 수 band' },
+      { key: '운동 시간', source: 'Apple Health', detail: '운동 시간 구간' },
+      { key: '활동 에너지', source: 'Apple Health', detail: '활동 kcal band' },
+      { key: 'VO2 max', source: 'Apple Health', detail: '심폐지구력 band' },
+    ],
+  },
+  {
+    label: '수면/회복',
+    options: [
+      { key: '수면 시간', source: 'Wearable', detail: '수면 시간 구간' },
+      { key: '수면 효율', source: 'Wearable', detail: '효율 band' },
+      { key: '수면 단계', source: 'Wearable', detail: '단계별 비율' },
+      { key: 'HRV', source: 'Wearable', detail: '회복 band' },
+    ],
+  },
+  {
+    label: '바이탈',
+    options: [
+      { key: '심박수', source: 'Wearable', detail: '심박 구간' },
+      { key: '안정시 심박수', source: 'Wearable', detail: '안정시 band' },
+      { key: '혈중 산소', source: 'Wearable', detail: 'SpO2 band' },
+      { key: '체중', source: 'Health Profile', detail: '체중 구간' },
+    ],
+  },
+  {
+    label: '메타데이터',
+    options: [
+      { key: '기기 유형', source: 'Device', detail: '기기 범주' },
+      { key: '기록 월', source: 'System', detail: '월 단위 기간' },
+    ],
+  },
+]
+const defaultDataCategories = ['걸음', '운동 시간', 'VO2 max']
+const dataCategoryOptions = dataCategoryGroups.flatMap((group) => group.options)
+const dataCategoryOptionByKey = Object.fromEntries(dataCategoryOptions.map((option) => [option.key, option]))
 const ageRanges = ['20-29', '30-39', '40-49', '50-59']
 const applicantDecisions: ApplicantDecision[] = ['승인', '거절']
 
-export function ResearchCreatePage() {
+type ResearchCreatePageProps = {
+  isCreateRoute: boolean
+  researcherSuiAddress: string | null
+  routeProjectId: string | null
+  routeView: ProjectView
+  onCreateRoute: () => void
+  onProjectRoute: (projectId: string, view?: ProjectView, options?: { replace?: boolean }) => void
+}
+
+export function ResearchCreatePage({
+  isCreateRoute,
+  onCreateRoute,
+  onProjectRoute,
+  researcherSuiAddress,
+  routeProjectId,
+  routeView,
+}: ResearchCreatePageProps) {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null)
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
-  const [isCreatingProject, setIsCreatingProject] = useState(false)
-  const [activeProjectView, setActiveProjectView] = useState<ProjectView>('home')
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
   const [isSavingProject, setIsSavingProject] = useState(false)
   const [isSavingInstitution, setIsSavingInstitution] = useState(false)
   const [pendingApplicantId, setPendingApplicantId] = useState<string | null>(null)
   const [pendingSettlementId, setPendingSettlementId] = useState<string | null>(null)
+  const dashboardDataRef = useRef<DashboardData | null>(null)
+  const lastForegroundRefreshAtRef = useRef(0)
+  const dAppKit = useDAppKit()
+  const isCreatingProject = isCreateRoute
+  const activeProjectView = routeView
 
-  const refreshDashboard = useCallback(async (preferredProjectId?: string) => {
-    setIsLoading(true)
+  const refreshDashboard = useCallback(async (options: RefreshDashboardOptions = {}) => {
+    const showLoading = options.showLoading ?? true
+
+    if (showLoading) {
+      setIsLoading(true)
+    }
+
     setErrorMessage('')
 
     try {
-      const nextData = await fetchInstitutionDashboard()
-      const nextProjectIds = nextData.projects.map((project) => project.id)
-
+      const nextData = await fetchInstitutionDashboard({ researcherSuiAddress })
       setDashboardData(nextData)
-      setSelectedProjectId((current) => {
-        if (preferredProjectId && nextProjectIds.includes(preferredProjectId)) {
-          return preferredProjectId
-        }
-
-        if (current && nextProjectIds.includes(current)) {
-          return current
-        }
-
-        return nextProjectIds[0] ?? null
-      })
+      return nextData
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '대시보드 데이터를 불러오지 못했습니다.')
+      return null
     } finally {
-      setIsLoading(false)
+      if (showLoading) {
+        setIsLoading(false)
+      }
     }
-  }, [])
+  }, [researcherSuiAddress])
+
+  useEffect(() => {
+    dashboardDataRef.current = dashboardData
+  }, [dashboardData])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void refreshDashboard()
+      void refreshDashboard({ showLoading: dashboardDataRef.current === null })
     }, 0)
 
     return () => window.clearTimeout(timer)
-  }, [refreshDashboard])
+  }, [activeProjectView, isCreatingProject, refreshDashboard, routeProjectId])
+
+  useEffect(() => {
+    const refreshOnReturn = () => {
+      if (document.visibilityState !== 'visible' || isCreatingProject) {
+        return
+      }
+
+      const now = Date.now()
+
+      if (now - lastForegroundRefreshAtRef.current < 1500) {
+        return
+      }
+
+      lastForegroundRefreshAtRef.current = now
+      void refreshDashboard({ showLoading: false })
+    }
+
+    window.addEventListener('focus', refreshOnReturn)
+    document.addEventListener('visibilitychange', refreshOnReturn)
+
+    return () => {
+      window.removeEventListener('focus', refreshOnReturn)
+      document.removeEventListener('visibilitychange', refreshOnReturn)
+    }
+  }, [isCreatingProject, refreshDashboard])
 
   const projects = useMemo(() => dashboardData?.projects ?? [], [dashboardData])
   const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null,
-    [projects, selectedProjectId],
+    () => projects.find((project) => project.id === routeProjectId) ?? projects[0] ?? null,
+    [projects, routeProjectId],
   )
   const applicantRecords = selectedProject ? dashboardData?.applicantsByProject[selectedProject.id] ?? [] : []
   const settlementRecords = selectedProject ? dashboardData?.settlementsByProject[selectedProject.id] ?? [] : []
   const submissionRecordsByApplicant = dashboardData?.submissionsByApplicant ?? {}
 
+  useEffect(() => {
+    if (isLoading || isCreatingProject || !selectedProject) {
+      return
+    }
+
+    if (routeProjectId !== selectedProject.id || routeView !== activeProjectView) {
+      onProjectRoute(selectedProject.id, activeProjectView, { replace: true })
+    }
+  }, [activeProjectView, isCreatingProject, isLoading, onProjectRoute, routeProjectId, routeView, selectedProject])
+
   const handleCreateProject = async (input: CreateResearchProjectInput) => {
+    if (!researcherSuiAddress) {
+      setErrorMessage('연구 생성을 위해 기관 Slush 지갑 연결이 필요합니다.')
+      return
+    }
+
     setIsSavingProject(true)
     setErrorMessage('')
 
     try {
-      const projectId = await createResearchProject(input)
-      setIsCreatingProject(false)
-      setActiveProjectView('home')
-      await refreshDashboard(projectId)
+      const onChainRequest = await createOnChainDataRequest({
+        dAppKit,
+        input: {
+          accessPeriodDays: input.accessPeriodDays,
+          criteriaHash: null,
+          dataScope: input.dataScope,
+          purpose: input.purpose || input.title,
+          rewardAmountPerParticipant: input.rewardAmountPerParticipant,
+          targetParticipants: input.targetParticipants,
+        },
+      })
+      const projectId = await createResearchProject({
+        ...input,
+        researcherSuiAddress,
+        suiDataRequestId: onChainRequest.suiDataRequestId,
+        suiDataRequestTxDigest: onChainRequest.txDigest,
+        suiRegistryPackageId: onChainRequest.registryPackageId,
+        suiRewardEscrowId: onChainRequest.rewardEscrowId,
+      })
+      await refreshDashboard()
+      onProjectRoute(projectId, 'home', { replace: true })
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '연구를 생성하지 못했습니다.')
     } finally {
@@ -194,16 +324,25 @@ export function ResearchCreatePage() {
             activeProjectView={activeProjectView}
             isCreatingProject={isCreatingProject}
             projects={projects}
-            selectedProjectId={selectedProjectId ?? ''}
+            selectedProjectId={selectedProject?.id ?? ''}
             onAddProject={() => {
-              setActiveProjectView('home')
-              setIsCreatingProject(true)
+              onCreateRoute()
             }}
-            onSelectMenu={(view) => setActiveProjectView(view)}
+            onSelectMenu={(view) => {
+              if (selectedProject) {
+                if (selectedProject.id === routeProjectId && view === activeProjectView) {
+                  void refreshDashboard({ showLoading: false })
+                }
+
+                onProjectRoute(selectedProject.id, view)
+              }
+            }}
             onSelectProject={(projectId) => {
-              setSelectedProjectId(projectId)
-              setActiveProjectView('home')
-              setIsCreatingProject(false)
+              if (projectId === selectedProject?.id && activeProjectView === 'home') {
+                void refreshDashboard({ showLoading: false })
+              }
+
+              onProjectRoute(projectId, 'home')
             }}
           />
 
@@ -212,8 +351,14 @@ export function ResearchCreatePage() {
               <LoadingPanel />
             ) : dashboardData?.institutionId === null ? (
               <MembershipRequiredPanel isSaving={isSavingInstitution} onCreateInstitution={handleCreateInstitution} />
+            ) : isCreatingProject && !researcherSuiAddress ? (
+              <WalletRequiredPanel />
             ) : isCreatingProject ? (
-              <ProjectCreateForm isSaving={isSavingProject} onCreateProject={handleCreateProject} />
+              <ProjectCreateForm
+                isSaving={isSavingProject}
+                researcherSuiAddress={researcherSuiAddress ?? ''}
+                onCreateProject={handleCreateProject}
+              />
             ) : selectedProject ? (
               <ProjectWorkspace
                 applicantRecords={applicantRecords}
@@ -227,7 +372,11 @@ export function ResearchCreatePage() {
                 onSettleReward={handleSettleReward}
               />
             ) : (
-              <EmptyProjectPanel onAddProject={() => setIsCreatingProject(true)} />
+              <EmptyProjectPanel
+                onAddProject={() => {
+                  onCreateRoute()
+                }}
+              />
             )}
           </div>
         </div>
@@ -352,6 +501,20 @@ function EmptyProjectPanel({ onAddProject }: { onAddProject: () => void }) {
   )
 }
 
+function WalletRequiredPanel() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>기관 Slush 지갑</CardTitle>
+        <CardDescription>연구를 만들려면 복호화 권한을 받을 기관 Sui 주소가 필요합니다.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ConnectButton />
+      </CardContent>
+    </Card>
+  )
+}
+
 function ResearchSidebar({
   activeProjectView,
   isCreatingProject,
@@ -465,13 +628,27 @@ function ResearchSidebar({
 
 function ProjectCreateForm({
   isSaving,
+  researcherSuiAddress,
   onCreateProject,
 }: {
   isSaving: boolean
+  researcherSuiAddress: string
   onCreateProject: (input: CreateResearchProjectInput) => void
 }) {
+  const [selectedDataCategories, setSelectedDataCategories] = useState(defaultDataCategories)
+
+  const toggleDataCategory = (category: string) => {
+    setSelectedDataCategories((current) =>
+      current.includes(category) ? current.filter((item) => item !== category) : [...current, category],
+    )
+  }
+
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+
+    if (selectedDataCategories.length === 0) {
+      return
+    }
 
     const formData = new FormData(event.currentTarget)
     const rewardAmount = parseNumber(formData.get('rewardAmountPerParticipant'))
@@ -486,21 +663,39 @@ function ProjectCreateForm({
       rewardAmountPerParticipant: rewardAmount,
       rewardCurrency: getFormValue(formData, 'rewardCurrency') || 'USDC',
       accessPeriodDays,
-      dataScope: dataCategories,
+      dataScope: selectedDataCategories,
+      researcherSuiAddress,
     })
   }
 
   return (
     <form className="min-w-0 space-y-5" onSubmit={handleSubmit}>
+      <SlushResearcherCard researcherSuiAddress={researcherSuiAddress} />
       <BasicInfoCard />
-      <EligibilityCard />
-      <DataSchemaCard />
+      <EligibilityCard selectedDataCategories={selectedDataCategories} onToggleDataCategory={toggleDataCategory} />
+      <DataSchemaCard selectedDataCategories={selectedDataCategories} />
       <div className="flex justify-end">
-        <Button type="submit" disabled={isSaving}>
+        <Button type="submit" disabled={isSaving || selectedDataCategories.length === 0}>
           {isSaving ? '저장 중' : '연구 생성'}
         </Button>
       </div>
     </form>
+  )
+}
+
+function SlushResearcherCard({ researcherSuiAddress }: { researcherSuiAddress: string }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>복호화 지갑</CardTitle>
+        <CardDescription>참가자가 제출할 때 이 주소로 Seal AccessGrant를 발급합니다.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-md border border-border bg-canvas-soft px-3 py-2 font-mono text-xs text-ink">
+          {researcherSuiAddress}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -528,6 +723,49 @@ function formatBytes(bytes: number) {
   }
 
   return `${value.toLocaleString('ko-KR', { maximumFractionDigits: value >= 10 ? 0 : 1 })} ${units[unitIndex]}`
+}
+
+function parseBytesLabel(value: string) {
+  const match = value.match(/^([\d,.]+)\s*(B|KB|MB|GB|TB)$/)
+
+  if (!match) {
+    return 0
+  }
+
+  const amount = Number(match[1].replaceAll(',', ''))
+  const unitIndex = ['B', 'KB', 'MB', 'GB', 'TB'].indexOf(match[2])
+
+  return Number.isFinite(amount) && unitIndex >= 0 ? amount * 1024 ** unitIndex : 0
+}
+
+function formatCompactIdentifier(value: string) {
+  return value.length > 16 ? `${value.slice(0, 5)}.......${value.slice(-5)}` : value
+}
+
+function formatParticipantLabel(label: string) {
+  return label.replace(/0x[a-f0-9]{12,}/gi, (match) => formatCompactIdentifier(match))
+}
+
+function formatAgentMemoryArtifactLabel(kind: string) {
+  if (kind === 'pseudonymization_plan') return 'Local Pseudonymization'
+  if (kind === 'privacy_verification_receipt') return 'Security Receipt'
+  if (kind === 'security_memory') return 'Learned Security Memory'
+  if (kind === 'agent_workflow_manifest') return 'Security Workflow'
+  return kind.replaceAll('_', ' ')
+}
+
+function buildHealthcareFileName(applicant: ApplicantRecord, submission: SubmissionRecord) {
+  const participantRef = formatCompactIdentifier(applicant.applicantCode).replaceAll('.', '')
+  return `modi-${participantRef}-${submission.id}-encrypted-healthcare-dataset.json`
+}
+
+function buildAgentMemoryFileName(applicant: ApplicantRecord, submission: SubmissionRecord, artifact: DashboardAgentMemoryArtifact) {
+  const participantRef = formatCompactIdentifier(applicant.applicantCode).replaceAll('.', '')
+  return `modi-${participantRef}-${submission.id}-${artifact.kind}.json`
+}
+
+function hasWalrusDownloadRef(submission: SubmissionRecord) {
+  return Boolean(submission.walrusBlobId || submission.walrusDatasetObjectId)
 }
 
 function ProjectWorkspace({
@@ -567,7 +805,13 @@ function ProjectWorkspace({
       />
     )
   } else if (selectedView === 'datasets') {
-    content = <ProjectDataSetCard selectedProject={selectedProject} />
+    content = (
+      <DataManagementView
+        applicantRecords={applicantRecords}
+        selectedProject={selectedProject}
+        submissionRecordsByApplicant={submissionRecordsByApplicant}
+      />
+    )
   } else if (selectedView === 'settlements') {
     content = (
       <SettlementCard
@@ -702,12 +946,14 @@ function RecentApplicantsCard({
                     onKeyDown={(event) => handleRowOpenKeyDown(event, () => onOpenSubmission(row.id))}
                   >
                     <td className="py-3 pr-5">
-                      <span className="block font-medium text-ink">{row.applicant}</span>
-                      <span className="tabular mt-1 block text-xs text-ink-mute">{row.applicantCode}</span>
+                      <span className="block font-medium text-ink">{formatParticipantLabel(row.applicant)}</span>
+                      <span className="tabular mt-1 block text-xs text-ink-mute">
+                        {formatCompactIdentifier(row.applicantCode)}
+                      </span>
                     </td>
                     <td className="tabular py-3 pr-5 font-medium text-ink">{row.score}</td>
                     <td className="py-3 pr-5 text-ink-secondary">{row.lastSync}</td>
-                    <td className="py-3">
+                    <td className="py-3" onClick={(event) => event.stopPropagation()}>
                       <DecisionButtonGroup
                         align="end"
                         disabled={pendingApplicantId === row.id}
@@ -812,12 +1058,14 @@ function ParticipantTableSection({
                     onKeyDown={(event) => handleRowOpenKeyDown(event, () => onOpenSubmission(row.id))}
                   >
                     <td className="py-3 pr-5">
-                      <span className="block font-medium text-ink">{row.applicant}</span>
-                      <span className="tabular mt-1 block text-xs text-ink-mute">{row.applicantCode}</span>
+                      <span className="block font-medium text-ink">{formatParticipantLabel(row.applicant)}</span>
+                      <span className="tabular mt-1 block text-xs text-ink-mute">
+                        {formatCompactIdentifier(row.applicantCode)}
+                      </span>
                     </td>
                     <td className="tabular py-3 pr-5 font-medium text-ink">{row.dataSent}</td>
                     <td className="py-3 pr-5 text-ink-secondary">{row.lastSync}</td>
-                    <td className="py-3">
+                    <td className="py-3" onClick={(event) => event.stopPropagation()}>
                       {onReviewApplicant ? (
                         <DecisionButtonGroup
                           align="end"
@@ -851,8 +1099,28 @@ function SubmissionHistoryModal({
   onClose: () => void
   submissions: SubmissionRecord[]
 }) {
+  const [downloadError, setDownloadError] = useState('')
+  const [downloadingKey, setDownloadingKey] = useState<string | null>(null)
+
   if (!applicant) {
     return null
+  }
+
+  const handleDownload = async ({ fileName, key, submission }: { fileName: string; key: string; submission: SubmissionRecord }) => {
+    setDownloadError('')
+    setDownloadingKey(key)
+
+    try {
+      await downloadWalrusBlob({
+        blobId: submission.walrusBlobId ?? '',
+        fileName,
+        objectId: submission.walrusDatasetObjectId,
+      })
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : 'Walrus 다운로드에 실패했습니다.')
+    } finally {
+      setDownloadingKey(null)
+    }
   }
 
   return (
@@ -870,7 +1138,7 @@ function SubmissionHistoryModal({
           <div className="min-w-0">
             <p className="text-sm font-medium text-ink">제출 기록</p>
             <p className="mt-1 truncate text-xs text-ink-mute">
-              {applicant.applicant} · {applicant.applicantCode}
+              {formatParticipantLabel(applicant.applicant)} · {formatCompactIdentifier(applicant.applicantCode)}
             </p>
           </div>
           <Button aria-label="모달 닫기" size="icon" type="button" variant="ghost" onClick={onClose}>
@@ -880,13 +1148,12 @@ function SubmissionHistoryModal({
         <div className="space-y-4 overflow-y-auto p-5">
           <div className="rounded-md border border-border bg-canvas-soft p-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">Sui Walrus</Badge>
-              <Badge variant="outline">접근 연동 예정</Badge>
+              <Badge variant="secondary">Walrus Blob</Badge>
             </div>
             <p className="mt-3 text-sm leading-6 text-ink-secondary">
-              이 제출 기록 영역은 향후 Walrus에 저장된 연구 데이터 자산과 연결되어, 기관이 승인된 범위 안에서 데이터 접근 상태와
-              제공 이력을 확인하는 진입점으로 사용됩니다.
+              참가자가 user-app에서 Walrus에 올린 암호화된 헬스케어 데이터셋을 내려받습니다.
             </p>
+            {downloadError ? <p className="mt-2 text-sm text-destructive">{downloadError}</p> : null}
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <MiniStat label="총 제출량" value={applicant.dataSent} />
@@ -899,32 +1166,47 @@ function SubmissionHistoryModal({
             </div>
           ) : (
             <div className="overflow-x-auto">
-            <table className="w-full min-w-[620px] text-left text-sm">
-              <thead className="text-xs text-ink-mute">
-                <tr className="border-b border-border">
-                  <th className="py-3 pr-5 font-medium">제출일</th>
-                  <th className="py-3 pr-5 font-medium">데이터 종류</th>
-                  <th className="py-3 pr-5 font-medium">대상 기간</th>
-                  <th className="py-3 pr-5 font-medium">용량</th>
-                  <th className="py-3 text-right font-medium">검증 상태</th>
-                </tr>
-              </thead>
-              <tbody>
-                {submissions.map((submission) => (
-                  <tr key={submission.id} className="border-b border-border last:border-0">
-                    <td className="tabular py-3 pr-5 font-medium text-ink">{submission.date}</td>
-                    <td className="py-3 pr-5 text-ink-secondary">{submission.category}</td>
-                    <td className="tabular py-3 pr-5 text-ink-secondary">{submission.period}</td>
-                    <td className="tabular py-3 pr-5 font-medium text-ink">{submission.volume}</td>
-                    <td className="py-3 text-right">
-                      <Badge variant={submission.status.includes('완료') || submission.status.includes('통과') ? 'secondary' : 'outline'}>
-                        {submission.status}
-                      </Badge>
-                    </td>
+              <table className="w-full min-w-[620px] text-left text-sm">
+                <thead className="text-xs text-ink-mute">
+                  <tr className="border-b border-border">
+                    <th className="py-3 pr-5 font-medium">제출일</th>
+                    <th className="py-3 pr-5 font-medium">대상 기간</th>
+                    <th className="py-3 pr-5 font-medium">용량</th>
+                    <th className="py-3 text-right font-medium">다운로드</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {submissions.map((submission) => {
+                    const downloadKey = `${submission.id}:healthcare-data`
+
+                    return (
+                      <tr key={submission.id} className="border-b border-border last:border-0">
+                        <td className="tabular py-3 pr-5 font-medium text-ink">{submission.date}</td>
+                        <td className="tabular py-3 pr-5 text-ink-secondary">{submission.period}</td>
+                        <td className="tabular py-3 pr-5 font-medium text-ink">{submission.volume}</td>
+                        <td className="py-3 text-right">
+                          <Button
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                            disabled={!hasWalrusDownloadRef(submission) || downloadingKey === downloadKey}
+                            onClick={() =>
+                              handleDownload({
+                                fileName: buildHealthcareFileName(applicant, submission),
+                                key: downloadKey,
+                                submission,
+                              })
+                            }
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            {downloadingKey === downloadKey ? '다운로드 중' : '다운로드'}
+                          </Button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -946,6 +1228,20 @@ function ProjectDataSetCard({ selectedProject }: { selectedProject: Project }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="rounded-md border border-border bg-white px-3 py-2">
+            <p className="text-xs text-ink-mute">Sui DataRequest</p>
+            <p className="mt-1 font-mono text-xs text-ink">
+              {selectedProject.suiDataRequestId ? formatCompactIdentifier(selectedProject.suiDataRequestId) : '생성 전'}
+            </p>
+          </div>
+          <div className="rounded-md border border-border bg-white px-3 py-2">
+            <p className="text-xs text-ink-mute">기관 Slush 주소</p>
+            <p className="mt-1 font-mono text-xs text-ink">
+              {selectedProject.researcherSuiAddress ? formatCompactIdentifier(selectedProject.researcherSuiAddress) : '연결 전'}
+            </p>
+          </div>
+        </div>
         {selectedProject.dataScope.length === 0 ? (
           <div className="rounded-md border border-border bg-canvas-soft px-4 py-8 text-center text-sm text-ink-mute">
             등록된 데이터 범위가 없습니다.
@@ -960,6 +1256,248 @@ function ProjectDataSetCard({ selectedProject }: { selectedProject: Project }) {
         )}
       </CardContent>
     </Card>
+  )
+}
+
+function DataManagementView({
+  applicantRecords,
+  selectedProject,
+  submissionRecordsByApplicant,
+}: {
+  applicantRecords: ApplicantRecord[]
+  selectedProject: Project
+  submissionRecordsByApplicant: Record<string, SubmissionRecord[]>
+}) {
+  const [downloadError, setDownloadError] = useState('')
+  const [downloadingKey, setDownloadingKey] = useState<string | null>(null)
+  const submissionRows = useMemo(
+    () =>
+      applicantRecords.flatMap((applicant) =>
+        (submissionRecordsByApplicant[applicant.id] ?? []).map((submission) => ({
+          applicant,
+          submission,
+        })),
+      ),
+    [applicantRecords, submissionRecordsByApplicant],
+  )
+  const totalHealthcareBytes = submissionRows.reduce((sum, row) => sum + parseBytesLabel(row.submission.volume), 0)
+  const agentMemoryRows = submissionRows.flatMap(({ applicant, submission }) =>
+    submission.agentMemoryArtifacts.map((artifact) => ({
+      applicant,
+      artifact,
+      submission,
+    })),
+  )
+
+  const handleDownload = async ({
+    fileName,
+    key,
+    submission,
+  }: {
+    fileName: string
+    key: string
+    submission: SubmissionRecord
+  }) => {
+    setDownloadError('')
+    setDownloadingKey(key)
+
+    try {
+      await downloadWalrusBlob({
+        blobId: submission.walrusBlobId ?? '',
+        fileName,
+        objectId: submission.walrusDatasetObjectId,
+      })
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : 'Walrus 다운로드에 실패했습니다.')
+    } finally {
+      setDownloadingKey(null)
+    }
+  }
+
+  const handleAgentMemoryDownload = async ({
+    artifact,
+    fileName,
+    key,
+  }: {
+    artifact: DashboardAgentMemoryArtifact
+    fileName: string
+    key: string
+  }) => {
+    setDownloadError('')
+    setDownloadingKey(key)
+
+    try {
+      await downloadWalrusBlob({
+        blobId: artifact.blobId,
+        fileName,
+        objectId: artifact.blobObjectId,
+      })
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : 'Walrus Security Agent record 다운로드에 실패했습니다.')
+    } finally {
+      setDownloadingKey(null)
+    }
+  }
+
+  return (
+    <div className="min-w-0 space-y-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <MiniStat label="제출 데이터" value={`${submissionRows.length}건`} />
+        <MiniStat label="누적 제출량" value={formatBytes(totalHealthcareBytes)} />
+        <MiniStat label="Security Trail" value={`${agentMemoryRows.length}개`} />
+        <MiniStat label="Security Memory" value={selectedProject.securityMemoryBlobId ? 'Active' : '없음'} />
+        <MiniStat label="Workflow Manifest" value={`${submissionRows.filter((row) => row.submission.agentMemoryManifestBlobId).length}개`} />
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle>Security Agent Audit Trail</CardTitle>
+              <CardDescription>Walrus policy memory를 재사용한 platform Security Agent 검증 기록을 확인합니다</CardDescription>
+            </div>
+            <Layers3 className="h-5 w-5 text-primary" />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {downloadError ? <p className="text-sm text-destructive">{downloadError}</p> : null}
+
+          {agentMemoryRows.length === 0 ? (
+            <div className="rounded-md border border-border bg-white px-4 py-8 text-center text-sm text-ink-mute">
+              아직 Walrus Security Agent audit trail이 없습니다.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[880px] text-left text-sm">
+                <thead className="text-xs text-ink-mute">
+                  <tr className="border-b border-border">
+                    <th className="py-3 pr-5 font-medium">참여자</th>
+                    <th className="py-3 pr-5 font-medium">Audit artifact</th>
+                    <th className="py-3 pr-5 font-medium">Walrus Blob</th>
+                    <th className="py-3 pr-5 font-medium">Hash</th>
+                    <th className="py-3 pr-5 font-medium">연결 제출</th>
+                    <th className="py-3 text-right font-medium">Record</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {agentMemoryRows.map(({ applicant, artifact, submission }) => {
+                    const downloadKey = `memory-${submission.id}-${artifact.blobId}`
+
+                    return (
+                      <tr key={`${submission.id}-${artifact.kind}-${artifact.blobId}`} className="border-b border-border last:border-0">
+                        <td className="py-3 pr-5">
+                          <span className="block font-medium text-ink">{formatParticipantLabel(applicant.applicant)}</span>
+                          <span className="tabular mt-1 block text-xs text-ink-mute">
+                            {formatCompactIdentifier(applicant.applicantCode)}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-5">
+                          <span className="block font-medium text-ink">{formatAgentMemoryArtifactLabel(artifact.kind)}</span>
+                          <span className="mt-1 block text-xs text-ink-mute">{artifact.title}</span>
+                        </td>
+                        <td className="tabular py-3 pr-5 text-ink-secondary">{formatCompactIdentifier(artifact.blobId)}</td>
+                        <td className="tabular py-3 pr-5 text-ink-secondary">{artifact.hash ? formatCompactIdentifier(artifact.hash) : '-'}</td>
+                        <td className="tabular py-3 pr-5 text-ink-secondary">{submission.date}</td>
+                        <td className="py-3 text-right">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={downloadingKey === downloadKey}
+                            onClick={() =>
+                              void handleAgentMemoryDownload({
+                                artifact,
+                                fileName: buildAgentMemoryFileName(applicant, submission, artifact),
+                                key: downloadKey,
+                              })
+                            }
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            {downloadingKey === downloadKey ? '받는 중' : '다운로드'}
+                          </Button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <CardTitle>데이터 다운로드</CardTitle>
+              <CardDescription>참가자가 user-app에서 Walrus에 올린 암호화된 헬스케어 데이터셋을 내려받습니다</CardDescription>
+            </div>
+            <DatabaseZap className="h-5 w-5 text-primary" />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {downloadError ? <p className="text-sm text-destructive">{downloadError}</p> : null}
+
+          {submissionRows.length === 0 ? (
+            <div className="rounded-md border border-border bg-white px-4 py-10 text-center text-sm text-ink-mute">
+              아직 다운로드할 헬스케어 데이터가 없습니다.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead className="text-xs text-ink-mute">
+                  <tr className="border-b border-border">
+                    <th className="py-3 pr-5 font-medium">참여자</th>
+                    <th className="py-3 pr-5 font-medium">제출일</th>
+                    <th className="py-3 pr-5 font-medium">대상 기간</th>
+                    <th className="py-3 pr-5 font-medium">용량</th>
+                    <th className="py-3 text-right font-medium">다운로드</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {submissionRows.map(({ applicant, submission }) => {
+                    const downloadKey = `${submission.id}:healthcare-data`
+
+                    return (
+                      <tr key={submission.id} className="border-b border-border last:border-0">
+                        <td className="py-3 pr-5">
+                          <span className="block font-medium text-ink">{formatParticipantLabel(applicant.applicant)}</span>
+                          <span className="tabular mt-1 block text-xs text-ink-mute">
+                            {formatCompactIdentifier(applicant.applicantCode)}
+                          </span>
+                        </td>
+                        <td className="tabular py-3 pr-5 font-medium text-ink">{submission.date}</td>
+                        <td className="tabular py-3 pr-5 text-ink-secondary">{submission.period}</td>
+                        <td className="tabular py-3 pr-5 font-medium text-ink">{submission.volume}</td>
+                        <td className="py-3 text-right">
+                          <Button
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                            disabled={!hasWalrusDownloadRef(submission) || downloadingKey === downloadKey}
+                            onClick={() =>
+                              handleDownload({
+                                fileName: buildHealthcareFileName(applicant, submission),
+                                key: downloadKey,
+                                submission,
+                              })
+                            }
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            {downloadingKey === downloadKey ? '다운로드 중' : '다운로드'}
+                          </Button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 
@@ -1020,8 +1558,8 @@ function SettlementCard({
                   return (
                     <tr key={row.id} className="border-b border-border last:border-0">
                       <td className="py-3 pr-5">
-                        <p className="font-medium text-ink">{row.applicant}</p>
-                        <p className="tabular mt-1 text-xs text-ink-mute">{row.applicantCode}</p>
+                        <p className="font-medium text-ink">{formatParticipantLabel(row.applicant)}</p>
+                        <p className="tabular mt-1 text-xs text-ink-mute">{formatCompactIdentifier(row.applicantCode)}</p>
                       </td>
                       <td className="tabular py-3 pr-5 font-medium text-ink">{row.amountLabel}</td>
                       <td className="py-3 pr-5">
@@ -1152,11 +1690,8 @@ function BasicInfoCard() {
       </CardHeader>
       <CardContent>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="연구명">
+          <Field className="md:col-span-2" label="연구명">
             <input className={inputClassName} name="title" defaultValue="Apple Health 활동/운동 리워드 검증 데이터" required />
-          </Field>
-          <Field label="기관명">
-            <input className={inputClassName} name="institutionName" defaultValue="Sui Active Insurance" />
           </Field>
           <Field className="md:col-span-2" label="연구 목적">
             <input className={inputClassName} name="purpose" defaultValue="예방 리워드 산정" />
@@ -1174,7 +1709,15 @@ function BasicInfoCard() {
   )
 }
 
-function EligibilityCard() {
+function EligibilityCard({
+  onToggleDataCategory,
+  selectedDataCategories,
+}: {
+  onToggleDataCategory: (category: string) => void
+  selectedDataCategories: string[]
+}) {
+  const selectedSet = new Set(selectedDataCategories)
+
   return (
     <Card>
       <CardHeader>
@@ -1219,20 +1762,61 @@ function EligibilityCard() {
 
         <div>
           <p className="text-sm font-medium text-ink">요청 데이터</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {dataCategories.map((category) => (
-              <span key={category} className="rounded-full border border-border bg-white px-3 py-2 text-sm text-ink-secondary">
-                {category}
-              </span>
+          <div className="mt-3 space-y-3">
+            {dataCategoryGroups.map((group) => (
+              <div key={group.label} className="rounded-md border border-border bg-white p-3">
+                <p className="mb-2 text-xs font-medium text-ink-mute">{group.label}</p>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                  {group.options.map((option) => {
+                    const isSelected = selectedSet.has(option.key)
+
+                    return (
+                      <button
+                        key={option.key}
+                        className={`flex min-h-20 items-start gap-2 rounded-md border px-3 py-2 text-left transition-colors ${
+                          isSelected
+                            ? 'border-primary bg-[#f6f4ff] text-primary'
+                            : 'border-border bg-white text-ink-secondary hover:bg-canvas-soft'
+                        }`}
+                        type="button"
+                        aria-pressed={isSelected}
+                        onClick={() => onToggleDataCategory(option.key)}
+                      >
+                        <span
+                          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                            isSelected ? 'border-primary bg-primary text-white' : 'border-border bg-white'
+                          }`}
+                          aria-hidden="true"
+                        >
+                          {isSelected ? <Check className="h-3 w-3" /> : null}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium">{option.key}</span>
+                          <span className={`mt-1 block text-xs ${isSelected ? 'text-primary/75' : 'text-ink-mute'}`}>
+                            {option.detail}
+                          </span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             ))}
           </div>
+          {selectedDataCategories.length === 0 ? (
+            <p className="mt-2 text-xs font-medium text-destructive">최소 1개 이상의 요청 데이터를 선택해야 합니다.</p>
+          ) : (
+            <p className="mt-2 text-xs text-ink-mute">선택됨: {selectedDataCategories.join(', ')}</p>
+          )}
         </div>
       </CardContent>
     </Card>
   )
 }
 
-function DataSchemaCard() {
+function DataSchemaCard({ selectedDataCategories }: { selectedDataCategories: string[] }) {
+  const selectedSchemaRows = buildSelectedSchemaRows(selectedDataCategories)
+
   return (
     <Card>
       <CardHeader>
@@ -1256,7 +1840,7 @@ function DataSchemaCard() {
               </tr>
             </thead>
             <tbody>
-              {schemaRows.map((row) => (
+              {[...schemaRows, ...selectedSchemaRows].map((row) => (
                 <tr key={row.field} className="border-b border-border last:border-0">
                   <td className="tabular py-3 pr-5 font-medium text-ink">{row.field}</td>
                   <td className="py-3 pr-5 text-ink-secondary">{row.source}</td>
@@ -1272,6 +1856,24 @@ function DataSchemaCard() {
       </CardContent>
     </Card>
   )
+}
+
+function buildSelectedSchemaRows(selectedDataCategories: string[]) {
+  return selectedDataCategories.map((category) => {
+    const option = dataCategoryOptionByKey[category]
+    const field = category
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9가-힣]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+
+    return {
+      field,
+      source: option?.source ?? 'User Health Data',
+      policy: `${category} 원본값 제거 후 연구용 범주만 허용`,
+      enabled: true,
+    }
+  })
 }
 
 function Field({ children, className, label }: { children: ReactNode; className?: string; label: string }) {

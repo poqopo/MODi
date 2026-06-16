@@ -75,3 +75,25 @@ Correct-order `registry::register_data_asset` smoke test:
 - Event type: `0xfe5843387f3fffa133b2575afe1f424b9dd4bca5bbe09b668cc95f54d866b6f4::registry::DataAssetRegistered`
 
 This smoke test used the synthetic local-dev Seal fallback encryption. Do not use `--allow-local-dev-store` for real participant data.
+
+## Seal-compatible Policy Package - 2026-06-11
+
+Published a new first-version package for Seal SDK policy evaluation. This package changes `registry::seal_approve` and `registry::seal_approve_with_agent_workflow` to non-public `entry` functions and keeps the actual access checks side-effect free.
+
+- Deployer: `0xc25f6a8ffd5bfdc3bb9d84ca3e4283f82e7e8798c1e92e7fb4fd73b0329aa777`
+- Package ID: `0x63021cfa4e4d4e110352e0ea9d9f0a321c9f355ba57acf3de84494079b6290f2`
+- Publish transaction: `8eeJc1ZXJv3KkFP8PKwB24t539FGdh74Ny4Mh9yZE5wK`
+- UpgradeCap ID: `0xbeea884df0d23f9867e649ba74d88396a561dfcef3d8d5bfc053cee2cbcdd83f`
+- Checkpoint: `347126578`
+- Seal key server default: Mysten testnet decentralized server `0xb012378c9f3799fb5b1a7083da74a4069e3c3f1c93de0b27212a5799ce1e1e98`
+- Seal aggregator default: `https://seal-aggregator-testnet.mystenlabs.com`
+
+## User-issued AccessGrant Policy Package - 2026-06-11
+
+Published a new first-version package that keeps the Seal-compatible `entry fun seal_approve` hook and adds `grant_access_to_request_researcher`. The new function lets the submitting user create an `AccessGrant` for the `DataRequest` researcher after creating `DataAsset` and `ConsentGrant`.
+
+- Deployer: `0xc25f6a8ffd5bfdc3bb9d84ca3e4283f82e7e8798c1e92e7fb4fd73b0329aa777`
+- Package ID: `0xc5be8a456d0ba7d33fbcff12e92d73181a3817872f6598f5cea65a5326ab3e21`
+- Publish transaction: `Rbre8UbUJ69RpLTxCM1QG1A5tSd3n9sy6TjVg4n85BH`
+- UpgradeCap ID: `0x2db008913bf520751861d93c90e561c844204939af0448ea2c91e0ee267b65a0`
+- Checkpoint: `347131027`

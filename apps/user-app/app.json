@@ -5,8 +5,13 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "scheme": "modi-user-app",
-    "assetBundlePatterns": ["**/*"],
+    "scheme": [
+      "modi-user-app",
+      "com.modi.userapp"
+    ],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "plugins": [
       [
         "@kingstinct/react-native-healthkit",
@@ -15,7 +20,9 @@
           "NSHealthUpdateUsageDescription": false,
           "background": false
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "ios": {
       "bundleIdentifier": "com.modi.userapp",

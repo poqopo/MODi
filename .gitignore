@@ -1,0 +1,4 @@
+.playwright-cli/
+Pub.testnet.toml
+output/playwright/*.png
+**/supabase/.temp/

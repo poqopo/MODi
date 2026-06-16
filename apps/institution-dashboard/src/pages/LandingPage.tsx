@@ -36,13 +36,13 @@ function HeroSection({ onCreateResearch }: LandingPageProps) {
       <div className="mesh-band absolute inset-x-0 top-0 h-[58%]" aria-hidden="true" />
       <div className="container relative py-10 sm:py-12 lg:py-14">
         <div className="mx-auto max-w-3xl text-center">
-          <Badge variant="secondary">기관 연구 운영 콘솔</Badge>
+          <Badge variant="secondary">헬스케어 마이데이터 Privacy Agent</Badge>
           <h1 className="mt-6 text-4xl font-light leading-tight text-ink sm:text-5xl lg:text-[56px]">
-            연구 생성부터 참여자 데이터 운영까지 한 화면에서 관리하세요
+            기업별 요청에 맞춰 건강 데이터를 안전하게 받을 수 있게 합니다
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base font-light leading-7 text-ink-secondary sm:text-lg">
-            MODi 기관 대시보드는 건강 데이터 연구를 만드는 팀이 모집 조건, 참여 신청, 동의 상태, Walrus 데이터
-            접근, 보상 지급까지 이어지는 운영 흐름을 확인하도록 설계되었습니다.
+            MODi는 기관의 데이터 요청사항을 Walrus policy memory로 만들고, 사용자가 보내는 헬스케어
+            마이데이터가 로컬 가명처리와 Privacy Agent 검증을 거쳐 전달되도록 돕습니다.
           </p>
           <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button size="lg" onClick={onCreateResearch}>
@@ -208,9 +208,9 @@ function DataPolicyPanel() {
           <LockKeyhole className="h-4 w-4 text-[#533afd]" />
         </div>
         <div>
-          <p className="text-sm font-medium">데이터 접근 정책</p>
+          <p className="text-sm font-medium">요청별 개인정보 정책</p>
           <p className="mt-1 text-xs leading-5 text-ink-secondary">
-            원본 건강 데이터가 아니라 범주화된 연구 제공 필드만 Seal policy와 연결됩니다.
+            기업 요청사항은 Walrus policy memory로 관리되고, 원본 건강 데이터가 아니라 범주화된 제공 필드만 연결됩니다.
           </p>
         </div>
       </div>
@@ -224,10 +224,10 @@ function CapabilitiesSection() {
       <div className="container">
         <div className="max-w-2xl">
           <Badge variant="outline">Core workflows</Badge>
-          <h2 className="mt-5 text-3xl font-light leading-tight text-ink sm:text-4xl">기관 연구자가 매일 쓰는 운영 기능</h2>
+          <h2 className="mt-5 text-3xl font-light leading-tight text-ink sm:text-4xl">요청 정책부터 안전한 데이터 수신까지</h2>
           <p className="mt-4 text-base font-light leading-7 text-ink-secondary">
-            사용자 앱에서 들어오는 참여 흐름을 기관 관점으로 뒤집어, 연구 생성과 신청 검토, 데이터 제공 로그를 한
-            콘솔에서 이어줍니다.
+            기관은 필요한 건강 데이터 범위를 정책으로 정의하고, 사용자는 그 정책에 맞게 안전화된 데이터만 제출합니다.
+            Privacy Agent 검증과 Walrus audit trail은 데이터가 어떤 기준으로 처리됐는지 남깁니다.
           </p>
         </div>
 

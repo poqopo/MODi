@@ -47,6 +47,28 @@
   select {
     font: inherit;
   }
+
+  mysten-dapp-kit-connect-modal.institution-slush-connect-modal {
+    --background: #ffffff;
+    --foreground: #0d253d;
+    --primary: #665efd;
+    --primary-foreground: #ffffff;
+    --secondary: #eef4fb;
+    --secondary-foreground: #0d253d;
+    --muted: #f6f9fc;
+    --muted-foreground: #64748d;
+    --accent: #f5e9d4;
+    --accent-foreground: #663f19;
+    --border: #d8e2ef;
+    --input: #b7cbe2;
+    --ring: #665efd;
+    --popover: #ffffff;
+    --popover-foreground: #0d253d;
+    --radius: 12px;
+    --font-sans: 'Inter', 'SF Pro Display', system-ui, sans-serif;
+    --cursor-button: pointer;
+    --cursor-menu-item: pointer;
+  }
 }
 
 @layer utilities {

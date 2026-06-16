@@ -49,9 +49,9 @@ export type PipelineEvent = {
 }
 
 export const metrics: Metric[] = [
-  { label: '진행 중 연구', value: '8', detail: '이번 달 3건 신규 생성' },
+  { label: '진행 중 요청', value: '8', detail: '이번 달 3건 신규 생성' },
   { label: '참여 신청', value: '1,284', detail: '검토 대기 96명' },
-  { label: '데이터 세트', value: '42', detail: '정책 통과율 99.2%' },
+  { label: '안전 처리 데이터', value: '42', detail: 'Privacy Agent 통과율 99.2%' },
   { label: '보상 예치', value: '18.6K SUI', detail: 'RewardEscrow 기준' },
 ]
 
@@ -90,20 +90,20 @@ export const studies: Study[] = [
 
 export const capabilities: Capability[] = [
   {
-    title: '연구 생성',
-    description: '연구 목적, 대상 조건, 보상 예치, 데이터 스키마를 한 흐름으로 정의하고 공개 전 정책 검토를 실행합니다.',
+    title: '요청 정책 생성',
+    description: '기업이 필요한 헬스케어 마이데이터 범위, 활용 목적, 보상 조건을 versioned policy pack으로 정의합니다.',
     icon: FlaskConical,
-    meta: 'Study builder',
+    meta: 'Policy builder',
   },
   {
     title: '참여 신청 관리',
-    description: '신청자의 매칭 점수, 동의 상태, 제외 조건을 확인하고 승인/보류/반려 결정을 일괄 처리합니다.',
+    description: '사용자가 어떤 요청에 동의했고 어떤 상태까지 진행됐는지 확인한 뒤 데이터 제출 가능 상태를 관리합니다.',
     icon: Users,
     meta: 'Applicant queue',
   },
   {
-    title: '데이터 관리',
-    description: 'Walrus 업로드, Seal 접근 권한, 데이터 제공 로그, 보상 지급 상태를 기관 기준으로 추적합니다.',
+    title: '안전 데이터 수신',
+    description: '로컬 가명처리, Privacy Agent 검증, Walrus audit trail을 거친 encrypted dataset만 기관에서 내려받습니다.',
     icon: DatabaseZap,
     meta: 'Data operations',
   },
@@ -116,14 +116,14 @@ export const applicants: Applicant[] = [
 ]
 
 export const pipelineEvents: PipelineEvent[] = [
-  { label: 'ConsentGrant', detail: '사용자 동의 범위 검증', icon: FileKey2 },
-  { label: 'AccessGrant', detail: 'Seal policy 연결', icon: KeyRound },
-  { label: 'DataAsset', detail: 'Walrus blob 참조 생성', icon: DatabaseZap },
+  { label: 'PolicyPack', detail: '기관 요청사항 Walrus publish', icon: FileKey2 },
+  { label: 'PrivacyCheck', detail: 'Agent 안전성 검증', icon: KeyRound },
+  { label: 'DataAsset', detail: 'encrypted Walrus blob 참조', icon: DatabaseZap },
   { label: 'RewardPaid', detail: 'Sui event 기록', icon: Banknote },
 ]
 
 export const trustSignals = [
-  { label: '민감정보 제거', icon: ShieldCheck },
-  { label: '스키마 기반 검토', icon: ClipboardCheck },
+  { label: '요청별 정책 적용', icon: ShieldCheck },
+  { label: 'Agent 검증 기록', icon: ClipboardCheck },
   { label: '건강 데이터 범주화', icon: HeartPulse },
 ]

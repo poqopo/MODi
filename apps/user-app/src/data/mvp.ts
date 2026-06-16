@@ -104,7 +104,7 @@ export const researchRequests: ResearchRequest[] = [
     expiresAt: '2026.06.30',
     matchScore: 86,
     participants: '156 / 350',
-    status: 'Agent 검토',
+    status: '검토중',
   },
   {
     id: 'REQ-SUI-1041',

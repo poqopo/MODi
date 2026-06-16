@@ -25,12 +25,12 @@ export function LandingPage({ onStart }: LandingPageProps) {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.previewPanel}>
           <PreviewItem
-            detail="걸음 수, 수면, 심박수 같은 개인 건강 지표를 한 곳에서 확인"
+            detail="걸음 수, 수면, 심박수 같은 개인 건강 지표를 직접 관리"
             icon={ShieldCheck}
-            label="헬스케어 측정"
+            label="헬스케어 마이데이터"
           />
-          <PreviewItem detail="Agent가 민감정보 제거와 제공 정책을 먼저 검토" icon={DatabaseZap} label="데이터 보호" />
-          <PreviewItem detail="동의, 접근, 보상 상태를 앱에서 투명하게 확인" icon={Wallet} label="보상 관리" />
+          <PreviewItem detail="기관 요청 정책에 맞춰 로컬 가명처리와 Agent 검증을 수행" icon={DatabaseZap} label="안전한 데이터 제공" />
+          <PreviewItem detail="동의, 접근, 제출, 보상 상태를 앱에서 투명하게 확인" icon={Wallet} label="제공 내역 관리" />
         </View>
       </ScrollView>
 

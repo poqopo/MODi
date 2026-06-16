@@ -18,6 +18,16 @@ type RecruitingProjectRow = {
   institutions: { name: string | null } | null
   project_age_ranges: Array<{ age_range: string | null }> | null
   project_data_fields: Array<{ field_key: string | null; is_enabled: boolean | null }> | null
+  policy_pack_blob_id: string | null
+  policy_pack_hash: string | null
+  policy_pack_object_id: string | null
+  policy_pack_version: string | null
+  security_memory_blob_id: string | null
+  security_memory_hash: string | null
+  security_memory_object_id: string | null
+  security_memory_updated_at: string | null
+  security_memory_version: string | null
+  seal_policy_id: string | null
 }
 
 export async function fetchRecruitingResearchRequests(): Promise<ResearchRequest[]> {
@@ -44,6 +54,16 @@ export async function fetchRecruitingResearchRequests(): Promise<ResearchRequest
         'institutions(name)',
         'project_age_ranges(age_range)',
         'project_data_fields(field_key,is_enabled)',
+        'policy_pack_blob_id',
+        'policy_pack_object_id',
+        'policy_pack_hash',
+        'policy_pack_version',
+        'security_memory_blob_id',
+        'security_memory_object_id',
+        'security_memory_hash',
+        'security_memory_version',
+        'security_memory_updated_at',
+        'seal_policy_id',
       ].join(','),
     )
     .eq('status', 'recruiting')
@@ -87,6 +107,16 @@ function mapRecruitingProject(row: RecruitingProjectRow): ResearchRequest {
     expiresAt: formatDate(row.recruitment_ends_at),
     matchScore: inferMatchScore(category),
     participants: `${Number(row.target_participants ?? 0).toLocaleString('ko-KR')}명 모집`,
+    policyPackBlobId: row.policy_pack_blob_id,
+    policyPackHash: row.policy_pack_hash,
+    policyPackObjectId: row.policy_pack_object_id,
+    policyPackVersion: row.policy_pack_version,
+    securityMemoryBlobId: row.security_memory_blob_id,
+    securityMemoryHash: row.security_memory_hash,
+    securityMemoryObjectId: row.security_memory_object_id,
+    securityMemoryUpdatedAt: row.security_memory_updated_at,
+    securityMemoryVersion: row.security_memory_version,
+    sealPolicyId: row.seal_policy_id,
     status: '승인 가능',
   }
 }

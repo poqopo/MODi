@@ -5,8 +5,6 @@
 Step-count datasets are encrypted client-side before Walrus storage. Seal decryption is approved only when the Sui objects still prove that:
 
 - the Seal identity matches the encrypted dataset identity
-- the encrypted dataset has an anchored policy/audit/checkpoint memory trail
-- the anchored agent audit passed
 - the `AccessGrant` is not revoked
 - the `AccessGrant` has not expired
 - the `AccessGrant` points to the provided `ConsentGrant`
@@ -19,17 +17,16 @@ Step-count datasets are encrypted client-side before Walrus storage. Seal decryp
 The policy function is:
 
 ```move
-modi::registry::seal_approve_with_agent_workflow(
+modi::registry::seal_approve(
     id: vector<u8>,
     access_grant: &AccessGrant,
     consent: &ConsentGrant,
     asset: &DataAsset,
-    workflow: &AgentWorkflowAnchor,
     clock: &Clock,
 )
 ```
 
-`registry::seal_approve` remains available for simpler flows, but MODi's agent-memory flow should use the stricter hook above.
+`registry::seal_approve_with_agent_workflow` remains available for a future agent-memory flow, but the current MVP does not upload agent audit memory or workflow checkpoints to Walrus.
 
 The `id` is the Seal SDK identity bytes used during encryption. For the step upload script, the identity is generated as:
 
@@ -47,23 +44,26 @@ The script writes this value as `sealIdentityHex` in:
 
 1. Mobile or web client creates a pseudonymized `step_activity_record`.
 2. Client downloads or creates the research `policy_pack` and stores it on Walrus.
-3. Client runs deterministic validation and local privacy-agent audit.
-4. Client stores `agent_audit_memory` and `workflow_checkpoint` artifacts on Walrus.
+3. Client runs local pseudonymization and platform safety verification.
+4. Client does not store agent audit memory or workflow checkpoint artifacts on Walrus.
 5. Client encrypts the dataset with Seal using:
    - package ID for `registry::seal_approve`
    - `sealIdentityHex`
    - configured key server object IDs
    - threshold
 6. Client stores the ciphertext on Walrus.
-7. Client stores processing receipt and manifest on Walrus.
+7. Client stores no processing receipt or agent audit result on Walrus.
 8. Client registers `DataAsset` on Sui.
-9. Client registers `AgentWorkflowAnchor` on Sui with policy/audit/checkpoint blob IDs and hashes.
-10. Researcher creates `AccessGrant` with the same Seal identity.
-11. Researcher decrypts only after Seal evaluates `registry::seal_approve_with_agent_workflow`.
+9. Client registers `ConsentGrant` on Sui.
+10. Client calls `grant_access_to_request_researcher` with the same Seal identity.
+11. In the same PTB, client shares `DataAsset` and `ConsentGrant`, then transfers the returned `AccessGrant` to the researcher wallet.
+12. Researcher decrypts only after Seal evaluates `registry::seal_approve`.
 
 ## Production Notes
 
 - Keep `AccessGrant` owned by the researcher wallet that is allowed to decrypt. Do not publish it as a broadly shared object unless the policy is extended with an explicit allowlist or session-address check.
+- Keep `DataAsset` and `ConsentGrant` shared or otherwise readable by the researcher wallet; owned-only user objects cannot be used by the institution dashboard to build Seal approval transaction bytes.
+- Persist the `DataRequest`, `DataAsset`, `ConsentGrant`, and `AccessGrant` object IDs with the submission metadata. The institution dashboard needs those object IDs to build Seal approval transaction bytes before decrypting.
 - Do not upload local development fallback ciphertext for real users.
 - Do not persist the Seal backup key server-side.
 - Treat Walrus blobs as publicly retrievable; confidentiality must come from client-side encryption.

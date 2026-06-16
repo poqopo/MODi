@@ -24,8 +24,8 @@ import {
   HeartPulse,
   LockKeyhole,
   Moon,
-  Plus,
   RefreshCw,
+  UploadCloud,
   Wallet,
   X,
   type LucideIcon,
@@ -42,7 +42,14 @@ import {
   getAppleHealthSupportMessage,
   type AppleHealthSnapshot,
 } from '../services/appleHealth'
+import { submitParticipantData, type ParticipantSubmissionProgress, type ParticipantSubmissionProgressStage } from '../services/participantSubmissions'
 import { fetchRecruitingResearchRequests } from '../services/researchProjects'
+import { subscribeToUserAppRealtimeChanges } from '../services/realtime'
+import {
+  fetchUserResearchApplications,
+  joinResearchProject,
+  type UserResearchApplication,
+} from '../services/userApplications'
 import { colors, radii, shadow } from '../styles/theme'
 import type { ConnectedHealthApp, DashboardTab, ParticipationRecord, ResearchRequest } from '../types/dashboard'
 
@@ -74,9 +81,11 @@ type NotificationItem = {
   title: string
   unread?: boolean
 }
+type SubmissionStatus = 'idle' | 'submitting' | 'submitted' | 'error'
 
 type DashboardPageProps = {
   activeTab: DashboardTab
+  activeUserId: string
   selectedRequestId: string
   onTabChange: (tab: DashboardTab) => void
   onSelectRequest: (requestId: string) => void
@@ -89,6 +98,39 @@ const navItems: Array<{ id: DashboardTab; label: string; icon: LucideIcon }> = [
   { id: 'my-projects', label: '내 프로젝트', icon: CheckCircle2 },
 ]
 
+const defaultSubmissionProgress: ParticipantSubmissionProgress = {
+  detail: '연구 요청 범위와 제출 기간을 계산하고 있습니다.',
+  label: '제출 준비중',
+  progress: 4,
+  stage: 'preparing',
+}
+
+const submissionProgressSteps: Array<{
+  label: string
+  stages: ParticipantSubmissionProgressStage[]
+}> = [
+  {
+    label: '로컬 가명처리',
+    stages: ['preparing', 'policy-loading', 'security-memory-loading', 'pseudonymizing'],
+  },
+  {
+    label: 'Privacy Agent 검증',
+    stages: ['verifying', 'hardening', 'reverifying', 'verified'],
+  },
+  {
+    label: 'Agent Memory',
+    stages: ['agent-memory-uploading', 'security-memory-updating'],
+  },
+  {
+    label: '암호화',
+    stages: ['encrypting'],
+  },
+  {
+    label: 'Walrus 제출',
+    stages: ['walrus-uploading', 'tx-verifying', 'registering', 'complete'],
+  },
+]
+
 const initialHealthTodos: HealthTodo[] = [
   { id: 'steps', label: '8,000보 이상 걷기', value: '8,426보', done: true },
   { id: 'sleep', label: '7시간 이상 수면', value: '7.2시간', done: true },
@@ -98,7 +140,7 @@ const initialHealthTodos: HealthTodo[] = [
 
 const notificationItems: NotificationItem[] = [
   {
-    detail: 'BetterSleep Coaching 요청이 Agent 검토 단계로 이동했습니다.',
+    detail: 'BetterSleep Coaching 요청이 데이터 검토 단계로 이동했습니다.',
     id: 'notice-sleep-review',
     time: '방금',
     title: '수면 코칭 데이터 검토',
@@ -139,7 +181,7 @@ const appleHealthFallbackMetrics: HomeMetric[] = [
 ]
 
 const homeProfileFallback = {
-  heightCm: 174,
+  heightCm: 180,
   name: 'Han',
   weightKg: 68,
 }
@@ -156,14 +198,20 @@ const sleepCycleSegments = [
 
 export function DashboardPage({
   activeTab,
+  activeUserId,
   selectedRequestId,
   onSelectRequest,
   onTabChange,
 }: DashboardPageProps) {
-  const [joinedProjectIds, setJoinedProjectIds] = useState<string[]>([])
   const [projectRequests, setProjectRequests] = useState<ResearchRequest[]>(researchRequests)
   const [projectLoadStatus, setProjectLoadStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [projectLoadMessage, setProjectLoadMessage] = useState<string | null>(null)
+  const [userApplications, setUserApplications] = useState<UserResearchApplication[]>([])
+  const [applicationLoadStatus, setApplicationLoadStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
+  const [applicationLoadMessage, setApplicationLoadMessage] = useState<string | null>(null)
+  const [joiningProjectId, setJoiningProjectId] = useState<string | null>(null)
+
+  const joinedProjectIds = userApplications.map((application) => application.projectId)
 
   const refreshProjectRequests = useCallback(async () => {
     setProjectLoadStatus('loading')
@@ -184,10 +232,65 @@ export function DashboardPage({
     void refreshProjectRequests()
   }, [refreshProjectRequests])
 
-  const joinProject = (requestId: string) => {
-    setJoinedProjectIds((currentIds) => (currentIds.includes(requestId) ? currentIds : [...currentIds, requestId]))
-    onSelectRequest(requestId)
-    onTabChange('my-projects')
+  const refreshUserApplications = useCallback(async () => {
+    setApplicationLoadStatus('loading')
+    setApplicationLoadMessage(null)
+
+    try {
+      const applications = await fetchUserResearchApplications(activeUserId)
+      setUserApplications(applications)
+      setApplicationLoadStatus('loaded')
+    } catch (error) {
+      setUserApplications([])
+      setApplicationLoadStatus('error')
+      setApplicationLoadMessage(error instanceof Error ? error.message : '내 프로젝트를 불러오지 못했습니다.')
+    }
+  }, [activeUserId])
+
+  useEffect(() => {
+    void refreshUserApplications()
+  }, [refreshUserApplications])
+
+  useEffect(() => {
+    if (activeTab === 'projects') {
+      void refreshProjectRequests()
+    }
+
+    if (activeTab === 'my-projects') {
+      void refreshUserApplications()
+    }
+  }, [activeTab, refreshProjectRequests, refreshUserApplications])
+
+  useEffect(() => {
+    return subscribeToUserAppRealtimeChanges({
+      loginId: activeUserId,
+      onApplicationsChange: () => void refreshUserApplications(),
+      onProjectsChange: () => void refreshProjectRequests(),
+    })
+  }, [activeUserId, refreshProjectRequests, refreshUserApplications])
+
+  const joinProject = async (requestId: string) => {
+    const request = projectRequests.find((projectRequest) => projectRequest.id === requestId)
+
+    if (!request) {
+      return
+    }
+
+    setJoiningProjectId(requestId)
+    setApplicationLoadMessage(null)
+
+    try {
+      const application = await joinResearchProject({ loginId: activeUserId, request })
+      setUserApplications((currentApplications) => upsertUserApplication(currentApplications, application))
+      onSelectRequest(requestId)
+      onTabChange('my-projects')
+      void refreshUserApplications()
+    } catch (error) {
+      setApplicationLoadStatus('error')
+      setApplicationLoadMessage(error instanceof Error ? error.message : '참여 신청을 저장하지 못했습니다.')
+    } finally {
+      setJoiningProjectId(null)
+    }
   }
 
   return (
@@ -195,6 +298,8 @@ export function DashboardPage({
       {activeTab === 'projects' ? (
         <ProjectsPage
           joinedProjectIds={joinedProjectIds}
+          joinMessage={applicationLoadMessage}
+          joiningProjectId={joiningProjectId}
           loadMessage={projectLoadMessage}
           loadStatus={projectLoadStatus}
           requests={projectRequests}
@@ -204,9 +309,12 @@ export function DashboardPage({
         />
       ) : activeTab === 'my-projects' ? (
         <MyProjectsPage
-          joinedProjectIds={joinedProjectIds}
+          activeUserId={activeUserId}
+          applicationLoadMessage={applicationLoadMessage}
+          applicationLoadStatus={applicationLoadStatus}
           requests={projectRequests}
           selectedRequestId={selectedRequestId}
+          userApplications={userApplications}
           onSelectRequest={onSelectRequest}
         />
       ) : (
@@ -361,15 +469,21 @@ function BottomTabButton({
 
 function HomePage() {
   const [appleHealthSnapshot, setAppleHealthSnapshot] = useState<AppleHealthSnapshot | null>(null)
+  const [hasRequestedHealthSync, setHasRequestedHealthSync] = useState(false)
   const [healthMessage, setHealthMessage] = useState<string | null>(null)
   const [healthSyncStatus, setHealthSyncStatus] = useState<AppleHealthSyncStatus>('idle')
   const isAppleHealthConnected = appleHealthSnapshot !== null
-  const appleHealthMetrics = appleHealthSnapshot ? getAppleHealthMetrics(appleHealthSnapshot) : appleHealthFallbackMetrics
-  const healthProfile = getHealthProfile(appleHealthSnapshot)
-  const rewardMetric = getReceivedRewardMetric(participationRecords)
-  const activitySteps = appleHealthSnapshot?.steps ?? 8426
+  const shouldShowHealthData = hasRequestedHealthSync && (healthSyncStatus !== 'syncing' || isAppleHealthConnected)
+  const appleHealthMetrics = appleHealthSnapshot
+    ? getAppleHealthMetrics(appleHealthSnapshot)
+    : shouldShowHealthData
+      ? appleHealthFallbackMetrics
+      : []
+  const healthProfile = getHealthProfile(appleHealthSnapshot, shouldShowHealthData)
+  const activitySteps = appleHealthSnapshot?.steps ?? (shouldShowHealthData ? 8426 : 0)
 
   const syncAppleHealth = useCallback(async () => {
+    setHasRequestedHealthSync(true)
     setHealthMessage(null)
     setHealthSyncStatus('syncing')
 
@@ -392,14 +506,8 @@ function HomePage() {
     setHealthSyncStatus('error')
   }, [])
 
-  useEffect(() => {
-    void syncAppleHealth()
-  }, [syncAppleHealth])
-
   return (
     <View style={styles.homePage}>
-      <RewardSummaryCard metric={rewardMetric} />
-
       <Card style={[styles.appleHealthCard, isAppleHealthConnected ? styles.appleHealthCardConnected : null]}>
         <CardContent style={styles.appleHealthContent}>
           <View style={styles.appleHealthHeader}>
@@ -425,6 +533,7 @@ function HomePage() {
                 <Text numberOfLines={1} style={styles.profileStatus}>
                   {getAppleHealthHeaderMessage({
                     healthMessage,
+                    hasRequestedSync: hasRequestedHealthSync,
                     isConnected: isAppleHealthConnected,
                     snapshot: appleHealthSnapshot,
                     status: healthSyncStatus,
@@ -434,22 +543,32 @@ function HomePage() {
             </View>
           </View>
 
-          <View style={styles.homeMetricGrid}>
-            {appleHealthMetrics.map((metric) => (
-              <HomeMetricCard key={metric.label} metric={metric} />
-            ))}
-          </View>
+          {shouldShowHealthData ? (
+            <>
+              <View style={styles.homeMetricGrid}>
+                {appleHealthMetrics.map((metric) => (
+                  <HomeMetricCard key={metric.label} metric={metric} />
+                ))}
+              </View>
 
-          <ActivityGraph steps={activitySteps} syncedAt={appleHealthSnapshot?.syncedAt} />
-          <SleepCycleGraph sleep={appleHealthSnapshot?.sleep} />
+              <ActivityGraph steps={activitySteps} syncedAt={appleHealthSnapshot?.syncedAt} />
+              <SleepCycleGraph sleep={appleHealthSnapshot?.sleep} />
+            </>
+          ) : (
+            <View style={styles.healthEmptyState}>
+              <Text style={styles.healthEmptyTitle}>건강 데이터 대기 중</Text>
+              <Text style={styles.healthEmptyText}>아직 표시할 건강 데이터가 없습니다.</Text>
+            </View>
+          )}
         </CardContent>
       </Card>
     </View>
   )
 }
 
-function RewardSummaryCard({ metric }: { metric: HomeMetric }) {
+function RewardSummaryCard({ metric, walletAddress }: { metric: HomeMetric; walletAddress?: string }) {
   const Icon = metric.icon
+  const compactWalletAddress = walletAddress ? formatCompactWalletAddress(walletAddress) : null
 
   return (
     <Card>
@@ -460,6 +579,11 @@ function RewardSummaryCard({ metric }: { metric: HomeMetric }) {
         <View style={styles.rewardSummaryCopy}>
           <Text style={styles.metricLabel}>{metric.label}</Text>
           <Text numberOfLines={1} style={styles.measurementDetail}>{metric.detail}</Text>
+          {compactWalletAddress ? (
+            <Text accessibilityLabel={`내 지갑 주소 ${walletAddress}`} numberOfLines={1} style={styles.rewardSummaryWalletText}>
+              내 지갑 {compactWalletAddress}
+            </Text>
+          ) : null}
         </View>
         <View style={styles.rewardSummaryValueRow}>
           <Text style={styles.rewardSummaryValue}>{metric.value}</Text>
@@ -643,32 +767,60 @@ function getReceivedRewardMetric(records: ParticipationRecord[]): HomeMetric {
   }
 }
 
+function formatCompactWalletAddress(address: string) {
+  const trimmedAddress = address.trim()
+
+  if (trimmedAddress.length <= 18) {
+    return trimmedAddress
+  }
+
+  return `${trimmedAddress.slice(0, 6)}...${trimmedAddress.slice(-4)}`
+}
+
+function getSubmissionProgressStepState(
+  currentStage: ParticipantSubmissionProgressStage,
+  stepIndex: number,
+): 'active' | 'complete' | 'pending' {
+  const activeStepIndex = submissionProgressSteps.findIndex((step) => step.stages.includes(currentStage))
+
+  if (activeStepIndex === -1) {
+    return currentStage === 'complete' ? 'complete' : 'pending'
+  }
+
+  if (stepIndex < activeStepIndex || currentStage === 'complete') return 'complete'
+  if (stepIndex === activeStepIndex) return 'active'
+  return 'pending'
+}
+
 function getAppleHealthHeaderMessage({
   healthMessage,
+  hasRequestedSync,
   isConnected,
   snapshot,
   status,
 }: {
   healthMessage: string | null
+  hasRequestedSync: boolean
   isConnected: boolean
   snapshot: AppleHealthSnapshot | null
   status: AppleHealthSyncStatus
 }) {
   if (status === 'syncing') return 'Apple 건강정보 권한과 데이터를 확인하는 중입니다.'
+  if (!hasRequestedSync) return '새로고침 전에는 건강 데이터를 표시하지 않습니다.'
   if (healthMessage) return healthMessage
   if (isConnected && snapshot) return `${formatClock(snapshot.syncedAt)} 동기화`
   return '운동, 수면, 심박수, 휴식 에너지를 가져옵니다.'
 }
 
-function getHealthProfile(snapshot: AppleHealthSnapshot | null) {
-  const heightCm = snapshot?.heightCm ?? homeProfileFallback.heightCm
-  const weightKg = snapshot?.bodyMassKg ?? homeProfileFallback.weightKg
+function getHealthProfile(snapshot: AppleHealthSnapshot | null, showFallback: boolean) {
+  const heightCm = snapshot?.heightCm ?? (showFallback ? homeProfileFallback.heightCm : undefined)
+  const weightKg = snapshot?.bodyMassKg ?? (showFallback ? homeProfileFallback.weightKg : undefined)
 
   return {
-    heightLabel: `${formatCompactNumber(heightCm)}cm`,
+    heightLabel: heightCm === undefined ? '--' : `${formatCompactNumber(heightCm)}cm`,
     initial: homeProfileFallback.name.slice(0, 1).toUpperCase(),
     name: homeProfileFallback.name,
-    weightLabel: `${formatCompactNumber(weightKg)}kg`,
+    weightLabel: weightKg === undefined ? '--' : `${formatCompactNumber(weightKg)}kg`,
   }
 }
 
@@ -1104,6 +1256,8 @@ function getBodyTone(score: number) {
 
 function ProjectsPage({
   joinedProjectIds,
+  joinMessage,
+  joiningProjectId,
   loadMessage,
   loadStatus,
   requests,
@@ -1112,12 +1266,14 @@ function ProjectsPage({
   onJoinProject,
 }: {
   joinedProjectIds: string[]
+  joinMessage: string | null
+  joiningProjectId: string | null
   loadMessage: string | null
   loadStatus: 'idle' | 'loading' | 'loaded' | 'error'
   requests: ResearchRequest[]
   selectedRequestId: string
   onRefresh: () => void
-  onJoinProject: (requestId: string) => void
+  onJoinProject: (requestId: string) => void | Promise<void>
 }) {
   const [categoryFilter, setCategoryFilter] = useState<RequestCategoryFilter>('all')
   const joinedProjectIdSet = new Set(joinedProjectIds)
@@ -1127,6 +1283,14 @@ function ProjectsPage({
   return (
     <View style={styles.section}>
       <ProjectSyncStatusCard loadMessage={loadMessage} loadStatus={loadStatus} onRefresh={onRefresh} />
+      {joinMessage ? (
+        <Card>
+          <CardContent style={styles.emptyState}>
+            <Text style={styles.itemTitle}>참여 신청 상태를 확인해 주세요.</Text>
+            <Text style={styles.itemMeta}>{joinMessage}</Text>
+          </CardContent>
+        </Card>
+      ) : null}
       <FilterGroup label="주제">
         {categoryFilters.map((filter) => (
           <FilterChip
@@ -1142,6 +1306,7 @@ function ProjectsPage({
 
       <ResearchList
         categoryFilter={categoryFilter}
+        joiningProjectId={joiningProjectId}
         requests={availableProjects}
         selectedRequestId={selectedRequestId}
         onSelectRequest={onJoinProject}
@@ -1177,21 +1342,48 @@ function ProjectSyncStatusCard({
 }
 
 function MyProjectsPage({
-  joinedProjectIds,
+  activeUserId,
+  applicationLoadMessage,
+  applicationLoadStatus,
   requests,
   selectedRequestId,
+  userApplications,
   onSelectRequest,
 }: {
-  joinedProjectIds: string[]
+  activeUserId: string
+  applicationLoadMessage: string | null
+  applicationLoadStatus: 'idle' | 'loading' | 'loaded' | 'error'
   requests: ResearchRequest[]
   selectedRequestId: string
+  userApplications: UserResearchApplication[]
   onSelectRequest: (requestId: string) => void
 }) {
-  const records = getJoinedProjectRecords(joinedProjectIds, requests)
+  const records = getJoinedProjectRecords(userApplications, requests)
+  const rewardMetric = getReceivedRewardMetric(records)
 
   return (
     <View style={styles.section}>
-      <ParticipationList records={records} selectedRequestId={selectedRequestId} onSelectRequest={onSelectRequest} />
+      <RewardSummaryCard metric={rewardMetric} walletAddress={activeUserId} />
+      {applicationLoadStatus === 'loading' || applicationLoadStatus === 'error' ? (
+        <Card>
+          <CardContent style={styles.emptyState}>
+            <Text style={styles.itemTitle}>
+              {applicationLoadStatus === 'loading' ? '내 프로젝트를 불러오는 중입니다.' : '내 프로젝트 동기화가 필요합니다.'}
+            </Text>
+            <Text style={styles.itemMeta}>
+              {applicationLoadStatus === 'loading'
+                ? 'Supabase에서 신청 및 승인 상태를 확인하고 있습니다.'
+                : applicationLoadMessage ?? '참여 신청 목록을 불러오지 못했습니다.'}
+            </Text>
+          </CardContent>
+        </Card>
+      ) : null}
+      <ParticipationList
+        activeUserId={activeUserId}
+        records={records}
+        selectedRequestId={selectedRequestId}
+        onSelectRequest={onSelectRequest}
+      />
     </View>
   )
 }
@@ -1222,13 +1414,22 @@ function getCategoryFilters(source: ResearchRequest[]) {
   ]
 }
 
-function getJoinedProjectRecords(joinedProjectIds: string[], requests: ResearchRequest[]) {
-  const joinedProjectIdSet = new Set(joinedProjectIds)
+function getJoinedProjectRecords(userApplications: UserResearchApplication[], requests: ResearchRequest[]) {
   const currentRecordById = new Map(participationRecords.map((record) => [record.id, record]))
+  const requestById = new Map(requests.map((request) => [request.id, request]))
 
-  return requests
-    .filter((request) => joinedProjectIdSet.has(request.id))
-    .map((request) => currentRecordById.get(request.id) ?? createParticipationRecord(request))
+  return userApplications
+    .map((application) => {
+      const request = requestById.get(application.projectId)
+
+      if (!request) {
+        return null
+      }
+
+      const baseRecord = currentRecordById.get(request.id) ?? createParticipationRecord(request)
+      return applyApplicationStateToRecord(baseRecord, application)
+    })
+    .filter((record): record is ParticipationRecord => Boolean(record))
 }
 
 function createParticipationRecord(request: ResearchRequest): ParticipationRecord {
@@ -1240,6 +1441,56 @@ function createParticipationRecord(request: ResearchRequest): ParticipationRecor
     progressValue: 24,
     rewardStatus: '조건 충족 전',
   }
+}
+
+function applyApplicationStateToRecord(record: ParticipationRecord, application: UserResearchApplication): ParticipationRecord {
+  if (application.status === 'approved') {
+    return {
+      ...record,
+      accessStatus: application.dataSentBytes > 0 ? '데이터 제출 완료' : 'consent 대기 중',
+      consentDate: formatApplicationDate(application.lastSubmissionAt),
+      consentStatus: '참여 승인 완료',
+      progressValue: application.dataSentBytes > 0 ? 64 : 48,
+      rewardStatus: application.dataSentBytes > 0 ? '정산 대기' : '조건 충족 전',
+    }
+  }
+
+  return {
+    ...record,
+    accessStatus: '기관 승인 대기',
+    consentDate: '오늘',
+    consentStatus: '참여 신청 완료',
+    progressValue: 24,
+    rewardStatus: '조건 충족 전',
+  }
+}
+
+function upsertUserApplication(currentApplications: UserResearchApplication[], nextApplication: UserResearchApplication) {
+  const exists = currentApplications.some((application) => application.projectId === nextApplication.projectId)
+
+  if (!exists) {
+    return [nextApplication, ...currentApplications]
+  }
+
+  return currentApplications.map((application) =>
+    application.projectId === nextApplication.projectId ? { ...application, ...nextApplication } : application,
+  )
+}
+
+function formatApplicationDate(value: string | null) {
+  if (!value) {
+    return '오늘'
+  }
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(value))
+}
+
+function isApplicationPendingReview(record: ParticipationRecord) {
+  return record.consentStatus === '참여 신청 완료' || record.accessStatus === '기관 승인 대기'
 }
 
 function ConnectedAppsSection() {
@@ -1303,14 +1554,16 @@ function ConnectedAppCard({ app }: { app: ConnectedHealthApp }) {
 
 function ResearchList({
   categoryFilter,
+  joiningProjectId,
   requests,
   selectedRequestId,
   onSelectRequest,
 }: {
   categoryFilter: RequestCategoryFilter
+  joiningProjectId: string | null
   requests: ResearchRequest[]
   selectedRequestId: string
-  onSelectRequest: (requestId: string) => void
+  onSelectRequest: (requestId: string) => void | Promise<void>
 }) {
   const [detailRequest, setDetailRequest] = useState<ResearchRequest | null>(null)
   const filteredRequests =
@@ -1339,11 +1592,12 @@ function ResearchList({
       )}
 
       <ResearchDetailModal
+        joiningProjectId={joiningProjectId}
         request={detailRequest}
         onClose={() => setDetailRequest(null)}
         onSelectRequest={(requestId) => {
           setDetailRequest(null)
-          onSelectRequest(requestId)
+          void onSelectRequest(requestId)
         }}
       />
     </View>
@@ -1393,17 +1647,20 @@ function ResearchCard({
 }
 
 function ResearchDetailModal({
+  joiningProjectId,
   onClose,
   onSelectRequest,
   request,
 }: {
+  joiningProjectId: string | null
   onClose: () => void
-  onSelectRequest: (requestId: string) => void
+  onSelectRequest: (requestId: string) => void | Promise<void>
   request: ResearchRequest | null
 }) {
   if (!request) return null
 
   const requiredData = getReadableRequiredData(request)
+  const isJoining = joiningProjectId === request.id
 
   return (
     <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" visible>
@@ -1442,7 +1699,7 @@ function ResearchDetailModal({
         </ScrollView>
         <View style={styles.modalFooter}>
           <Button label="닫기" onPress={onClose} variant="secondary" />
-          <Button label="참여하기" onPress={() => onSelectRequest(request.id)} />
+          <Button disabled={isJoining} label={isJoining ? '신청 중' : '참여하기'} onPress={() => onSelectRequest(request.id)} />
         </View>
       </SafeAreaView>
     </Modal>
@@ -1544,10 +1801,12 @@ function formatAllowedUse(allowedUse: string) {
 }
 
 function ParticipationList({
+  activeUserId,
   records,
   selectedRequestId,
   onSelectRequest,
 }: {
+  activeUserId: string
   records: ParticipationRecord[]
   selectedRequestId: string
   onSelectRequest: (requestId: string) => void
@@ -1579,7 +1838,7 @@ function ParticipationList({
         </Card>
       )}
 
-      <ParticipationDetailModal record={detailRecord} onClose={() => setDetailRecord(null)} />
+      <ParticipationDetailModal activeUserId={activeUserId} record={detailRecord} onClose={() => setDetailRecord(null)} />
     </View>
   )
 }
@@ -1594,6 +1853,7 @@ function ParticipationCard({
   selected: boolean
 }) {
   const latestLog = getDataProvisionLogs(record)[0]
+  const isPendingReview = isApplicationPendingReview(record)
 
   return (
     <Pressable
@@ -1602,7 +1862,7 @@ function ParticipationCard({
       onPress={onOpen}
       style={({ pressed }) => (pressed ? styles.pressed : null)}
     >
-      <Card style={selected ? styles.selectedCard : null}>
+      <Card style={[selected ? styles.selectedCard : null, isPendingReview ? styles.reviewPendingCard : null]}>
         <CardContent style={styles.serviceCardContent}>
           <View style={styles.serviceCardHeader}>
             <View style={styles.serviceCardCopy}>
@@ -1612,9 +1872,9 @@ function ParticipationCard({
             </View>
           </View>
 
-          <View style={styles.serviceRewardRow}>
+          <View style={[styles.serviceRewardRow, isPendingReview ? styles.serviceRewardRowReviewPending : null]}>
             <View style={styles.serviceRewardCopy}>
-              <Text style={styles.tinyMuted}>최근 제공</Text>
+              <Text style={styles.tinyMuted}>최근 활동</Text>
               <Text style={styles.serviceDetailValue}>{latestLog ? `${latestLog.date} · ${latestLog.status}` : '제공 내역 없음'}</Text>
             </View>
             <View style={styles.detailPill}>
@@ -1629,15 +1889,21 @@ function ParticipationCard({
 }
 
 function ParticipationDetailModal({
+  activeUserId,
   onClose,
   record,
 }: {
+  activeUserId: string
   onClose: () => void
   record: ParticipationRecord | null
 }) {
   const provisionLogs = record ? getDataProvisionLogs(record) : []
   const defaultLogId = provisionLogs[0]?.id ?? null
   const [expandedLogId, setExpandedLogId] = useState<string | null>(defaultLogId)
+  const [submissionMessage, setSubmissionMessage] = useState<string | null>(null)
+  const [submissionProgress, setSubmissionProgress] = useState<ParticipantSubmissionProgress>(defaultSubmissionProgress)
+  const [submissionStatus, setSubmissionStatus] = useState<SubmissionStatus>('idle')
+  const [isSubmissionConfirmOpen, setIsSubmissionConfirmOpen] = useState(false)
 
   useEffect(() => {
     setExpandedLogId(defaultLogId)
@@ -1646,6 +1912,31 @@ function ParticipationDetailModal({
   if (!record) return null
 
   const requiredData = getReadableRequiredData(record)
+  const isPendingReview = isApplicationPendingReview(record)
+  const isSubmissionLoading = submissionStatus === 'submitting'
+  const submissionLoadingProgress = Math.round(submissionProgress.progress)
+  const submitAdditionalData = async () => {
+    setSubmissionMessage(null)
+    setIsSubmissionConfirmOpen(false)
+    setSubmissionProgress(defaultSubmissionProgress)
+    setSubmissionStatus('submitting')
+
+    try {
+      const submissionResult = await submitParticipantData({
+        loginId: activeUserId,
+        onProgress: setSubmissionProgress,
+        request: record,
+      })
+      const txLabel = submissionResult.walrusTxDigest
+        ? `Tx ${formatCompactWalletAddress(submissionResult.walrusTxDigest)}`
+        : `Blob ${formatCompactWalletAddress(submissionResult.walrusBlobId)}`
+      setSubmissionStatus('submitted')
+      setSubmissionMessage(`user-app 가명처리, Privacy Agent 검증, Seal 암호화 후 Walrus 업로드가 완료되었습니다. ${txLabel}`)
+    } catch (error) {
+      setSubmissionStatus('error')
+      setSubmissionMessage(error instanceof Error ? error.message : '데이터 제출에 실패했습니다.')
+    }
+  }
 
   return (
     <Modal animationType="slide" onRequestClose={onClose} presentationStyle="pageSheet" visible>
@@ -1697,10 +1988,121 @@ function ParticipationDetailModal({
               ))}
             </View>
             <View style={styles.accessLogActionRow}>
-              <Button icon={Plus} label="추가 제출하기" onPress={() => undefined} variant="secondary" />
+              <Button
+                disabled={isPendingReview || submissionStatus === 'submitting'}
+                icon={UploadCloud}
+                label={isPendingReview ? '승인 대기 중' : submissionStatus === 'submitting' ? '제출 중' : '데이터 제출하기'}
+                onPress={() => setIsSubmissionConfirmOpen(true)}
+                size="lg"
+              />
             </View>
+            {submissionMessage ? (
+              <Text style={[styles.sectionLead, submissionStatus === 'error' ? styles.errorText : styles.successText]}>
+                {submissionMessage}
+              </Text>
+            ) : null}
           </View>
         </ScrollView>
+        <Modal
+          animationType="fade"
+          onRequestClose={() => {
+            if (!isSubmissionLoading) setIsSubmissionConfirmOpen(false)
+          }}
+          transparent
+          visible={isSubmissionConfirmOpen}
+        >
+          <View style={styles.confirmModalBackdrop}>
+            <View style={styles.confirmModalCard}>
+              <View style={styles.confirmModalHeader}>
+                <View style={styles.modalTitleGroup}>
+                  <Text style={styles.confirmModalTitle}>데이터 제출하기</Text>
+                  <Text style={styles.itemMeta}>{record.title}</Text>
+                </View>
+                <Pressable
+                  accessibilityLabel="닫기"
+                  accessibilityRole="button"
+                  disabled={isSubmissionLoading}
+                  onPress={() => setIsSubmissionConfirmOpen(false)}
+                  style={styles.iconButton}
+                >
+                  <X color={colors.text} size={20} strokeWidth={2.2} />
+                </Pressable>
+              </View>
+
+              <View style={styles.confirmModalBody}>
+                <Text style={styles.sectionLead}>이 연구가 요청한 데이터 항목을 user-app에서 가명처리하고, Privacy Agent 검증과 Seal 암호화를 거친 뒤 Walrus에 제출합니다.</Text>
+                <View style={styles.requiredDataList}>
+                  {requiredData.map((item) => (
+                    <View key={item.label} style={styles.requiredDataRow}>
+                      <Text style={styles.requiredDataLabel}>{item.label}</Text>
+                      <Text style={styles.requiredDataValue}>{item.value}</Text>
+                    </View>
+                  ))}
+                </View>
+                {submissionStatus === 'error' && submissionMessage ? (
+                  <Text style={[styles.sectionLead, styles.errorText]}>{submissionMessage}</Text>
+                ) : null}
+              </View>
+
+              <View style={styles.confirmModalFooter}>
+                <Button
+                  disabled={isSubmissionLoading}
+                  label="닫기"
+                  onPress={() => setIsSubmissionConfirmOpen(false)}
+                  variant="secondary"
+                />
+                <Button
+                  disabled={isSubmissionLoading}
+                  label="제출하기"
+                  onPress={submitAdditionalData}
+                />
+              </View>
+            </View>
+          </View>
+        </Modal>
+        <Modal animationType="fade" onRequestClose={() => undefined} transparent visible={isSubmissionLoading}>
+          <View style={styles.loadingModalBackdrop}>
+            <View style={styles.loadingModalCard}>
+              <View style={styles.loadingProgressHeader}>
+                <Text style={styles.loadingModalTitle}>{submissionProgress.label}</Text>
+                <Text style={styles.loadingProgressValue}>{submissionLoadingProgress}%</Text>
+              </View>
+              <Text style={styles.loadingModalDetail}>{submissionProgress.detail}</Text>
+              <View style={styles.loadingProgressBlock}>
+                <Progress value={submissionLoadingProgress} />
+              </View>
+              <View style={styles.loadingStepList}>
+                {submissionProgressSteps.map((step, index) => {
+                  const stepState = getSubmissionProgressStepState(submissionProgress.stage, index)
+
+                  return (
+                    <View key={step.label} style={styles.loadingStepRow}>
+                      <View
+                        style={[
+                          styles.loadingStepDot,
+                          stepState === 'complete' ? styles.loadingStepDotComplete : null,
+                          stepState === 'active' ? styles.loadingStepDotActive : null,
+                        ]}
+                      >
+                        {stepState === 'complete' ? <Check color={colors.surface} size={10} strokeWidth={3} /> : null}
+                      </View>
+                      <Text
+                        numberOfLines={1}
+                        style={[
+                          styles.loadingStepText,
+                          stepState === 'complete' ? styles.loadingStepTextComplete : null,
+                          stepState === 'active' ? styles.loadingStepTextActive : null,
+                        ]}
+                      >
+                        {step.label}
+                      </Text>
+                    </View>
+                  )
+                })}
+              </View>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </Modal>
   )
@@ -1716,9 +2118,10 @@ function DataProvisionLogItem({
   onToggle: () => void
 }) {
   const statusTone = getProvisionStatusTone(entry.status)
+  const isPendingReview = entry.status === '심사중'
 
   return (
-    <View style={styles.accessLogItem}>
+    <View style={[styles.accessLogItem, isPendingReview ? styles.accessLogItemReviewPending : null]}>
       <Pressable accessibilityRole="button" onPress={onToggle} style={({ pressed }) => [styles.accessLogHeader, pressed ? styles.pressed : null]}>
         <View style={styles.accessLogHeaderCopy}>
           <Text style={styles.accessLogDate}>{entry.date}</Text>
@@ -1743,11 +2146,17 @@ function DataProvisionLogItem({
             <Text style={styles.tinyMuted}>제공 데이터</Text>
             <Text style={styles.accessLogData}>{entry.dataLabel}</Text>
           </View>
-          <View style={styles.accessManagementList}>
-            {entry.management.map((item) => (
-              <View key={item.label} style={styles.accessManagementRow}>
-                <Text style={styles.accessManagementLabel}>{item.label}</Text>
-                <Text style={styles.accessManagementValue}>{item.value}</Text>
+          <View style={styles.accessEventList}>
+            {entry.events.map((item) => (
+              <View key={`${entry.id}-${item.label}`} style={styles.accessEventRow}>
+                <View style={[styles.accessEventDot, item.tone === 'success' ? styles.accessEventDotSuccess : null]} />
+                <View style={styles.accessEventContent}>
+                  <View style={styles.accessEventHeader}>
+                    <Text style={styles.accessEventLabel}>{item.label}</Text>
+                    <Text style={styles.accessEventTime}>{item.time}</Text>
+                  </View>
+                  <Text style={styles.accessEventDetail}>{item.detail}</Text>
+                </View>
               </View>
             ))}
           </View>
@@ -1760,13 +2169,21 @@ function DataProvisionLogItem({
 function getProvisionStatusTone(status: string) {
   if (status === '리워드 지급 완료') {
     return {
+      backgroundColor: '#e9f7ee',
+      borderColor: '#bde7ca',
+      color: '#12804a',
+    }
+  }
+
+  if (status === '참가 승인 완료') {
+    return {
       backgroundColor: colors.successFill,
       borderColor: '#a9d9bd',
       color: colors.successText,
     }
   }
 
-  if (status === 'Agent 검토중') {
+  if (status === '검토중' || status === '심사중') {
     return {
       backgroundColor: colors.accent,
       borderColor: '#f5c26f',
@@ -1785,52 +2202,88 @@ function getDataProvisionLogs(record: ParticipationRecord) {
   const readableData = record.requiredConditionTags.map(formatConditionTag)
   const primaryData = readableData.slice(0, 5).join(', ')
   const fullData = readableData.join(', ')
+  const approvalLog = {
+    dataLabel: fullData,
+    date: record.consentDate,
+    events: [
+      {
+        detail: '기관이 참여 신청을 승인했습니다.',
+        label: '승인 완료',
+        time: record.consentDate,
+        tone: 'success',
+      },
+    ],
+    id: `${record.id}-approved-${record.consentDate}`,
+    management: [
+      { label: '신청 상태', value: '기관이 참여 신청을 승인했습니다.' },
+      { label: '데이터 전송', value: '승인 이후 사용자가 직접 제출할 때만 Walrus 업로드가 시작됩니다.' },
+      { label: '다음 단계', value: '데이터 제출하기에서 요청 데이터 항목을 확인하고 제출할 수 있습니다.' },
+    ],
+    status: '참가 승인 완료',
+    title: '참가 승인 완료',
+  }
 
-  if (record.progressValue < 60) {
+  if (isApplicationPendingReview(record)) {
     return [
       {
         dataLabel: fullData,
         date: record.consentDate,
-        id: `${record.id}-pending-${record.consentDate}`,
-        management: [
-          { label: 'Agent 검토', value: '보낼 데이터가 프로젝트 목적과 맞는지 확인 중입니다.' },
-          { label: '전송 상태', value: '검토가 끝나기 전까지 기관은 데이터를 볼 수 없습니다.' },
-          { label: '저장 방식', value: '전송 전 임시 요약만 만들고 원본 건강 기록은 앱 밖에 저장하지 않습니다.' },
+        events: [
+          {
+            detail: '참여 신청이 기관 검토 큐에 들어갔습니다.',
+            label: '신청 접수',
+            time: record.consentDate,
+          },
+          {
+            detail: '승인 전에는 기관이 건강 데이터에 접근할 수 없습니다.',
+            label: '기관 접근',
+            time: '대기',
+          },
+          {
+            detail: '승인 및 데이터 제출 뒤 보상 조건을 계산합니다.',
+            label: '리워드 수령',
+            time: '대기',
+          },
         ],
-        status: 'Agent 검토중',
-        title: '데이터 제공 준비',
+        id: `${record.id}-application-review`,
+        management: [
+          { label: '신청 상태', value: '기관이 참여 신청을 심사하고 있습니다.' },
+          { label: '데이터 전송', value: '승인 전에는 기관이 건강 데이터를 열람할 수 없습니다.' },
+          { label: '다음 단계', value: '승인되면 정책 확인과 로컬 처리 단계를 이어갑니다.' },
+        ],
+        status: '심사중',
+        title: '참여 신청 심사',
       },
     ]
   }
 
+  if (record.progressValue < 60) {
+    return [approvalLog]
+  }
+
   return [
-    {
-      dataLabel: fullData,
-      date: '2026.06.08',
-      id: `${record.id}-20260608`,
-      management: [
-        { label: 'Agent 검증', value: '금지 데이터와 정밀 시간 정보가 제외됐는지 확인했습니다.' },
-        { label: '제출 상태', value: '검토가 끝나면 제출 완료 상태로 전환됩니다.' },
-        { label: '접근 권한', value: '검토 중에는 요청 기관이 데이터를 열람할 수 없습니다.' },
-      ],
-      status: 'Agent 검토중',
-      title: '일일 건강 기록 업데이트',
-    },
-    {
-      dataLabel: primaryData,
-      date: '2026.06.07',
-      id: `${record.id}-20260607`,
-      management: [
-        { label: 'Agent 검증', value: '프로젝트 목적에 필요한 항목만 남기고 상세 식별 정보는 제외했습니다.' },
-        { label: '기관 접근', value: '요청 기관은 요약 데이터와 접근 로그만 확인할 수 있습니다.' },
-        { label: '보상 처리', value: '접근 기록이 확인되면 보상 조건에 반영됩니다.' },
-      ],
-      status: '제출 완료',
-      title: `${formatAllowedUse(record.allowedUse)}용 요약 제공`,
-    },
+    approvalLog,
     {
       dataLabel: primaryData,
       date: '2026.06.06',
+      events: [
+        {
+          detail: '사용자 승인 후 Walrus에 초기 요약 데이터를 업로드했습니다.',
+          label: '보낸 시각',
+          time: '2026.06.06 09:12',
+        },
+        {
+          detail: `${record.organization}에서 연구 조건 확인을 위해 접근했습니다.`,
+          label: '기관 접근',
+          time: '2026.06.06 10:04',
+        },
+        {
+          detail: `${record.reward} 보상 지급이 완료되었습니다.`,
+          label: '리워드 수령',
+          time: '2026.06.06 18:20',
+          tone: 'success',
+        },
+      ],
       id: `${record.id}-20260606`,
       management: [
         { label: '동의 기록', value: '사용자 동의와 접근 요청 조건이 Sui 이벤트로 남았습니다.' },
@@ -1839,6 +2292,64 @@ function getDataProvisionLogs(record: ParticipationRecord) {
       ],
       status: '리워드 지급 완료',
       title: '초기 데이터 제공',
+    },
+    {
+      dataLabel: primaryData,
+      date: '2026.06.07',
+      events: [
+        {
+          detail: '프로젝트 목적에 맞춘 요약 데이터만 제출했습니다.',
+          label: '보낸 시각',
+          time: '2026.06.07 08:46',
+        },
+        {
+          detail: `${record.organization}에서 요약 데이터와 접근 로그를 확인했습니다.`,
+          label: '기관 접근',
+          time: '2026.06.07 11:18',
+        },
+        {
+          detail: '접근 기록 확인 뒤 보상 정산에 반영됩니다.',
+          label: '리워드 수령',
+          time: '대기',
+        },
+      ],
+      id: `${record.id}-20260607`,
+      management: [
+        { label: '정책 확인', value: '프로젝트 목적에 필요한 항목만 남기고 상세 식별 정보는 제외했습니다.' },
+        { label: '기관 접근', value: '요청 기관은 요약 데이터와 접근 로그만 확인할 수 있습니다.' },
+        { label: '보상 처리', value: '접근 기록이 확인되면 보상 조건에 반영됩니다.' },
+      ],
+      status: '제출 완료',
+      title: `${formatAllowedUse(record.allowedUse)}용 요약 제공`,
+    },
+    {
+      dataLabel: fullData,
+      date: '2026.06.08',
+      events: [
+        {
+          detail: '일일 건강 기록 업데이트를 Walrus에 제출했습니다.',
+          label: '보낸 시각',
+          time: '2026.06.08 09:28',
+        },
+        {
+          detail: '기관 접근 전 정책 확인 단계입니다.',
+          label: '기관 접근',
+          time: '대기',
+        },
+        {
+          detail: '기관 접근과 검토가 끝나면 리워드 처리 여부가 결정됩니다.',
+          label: '리워드 수령',
+          time: '대기',
+        },
+      ],
+      id: `${record.id}-20260608`,
+      management: [
+        { label: '정책 확인', value: '금지 데이터와 정밀 시간 정보가 제외됐는지 확인했습니다.' },
+        { label: '제출 상태', value: '검토가 끝나면 제출 완료 상태로 전환됩니다.' },
+        { label: '접근 권한', value: '검토 중에는 요청 기관이 데이터를 열람할 수 없습니다.' },
+      ],
+      status: '검토중',
+      title: '일일 건강 기록 업데이트',
     },
   ]
 }
@@ -1888,9 +2399,9 @@ function FilterChip({
 
 function AgentManagement() {
   const memoryItems = [
-    { label: '선호 제공 목적', value: '보험 리워드, 건강 코칭' },
-    { label: '반복 적용 규칙', value: '상세 위치와 정밀 시간 제외' },
-    { label: '최근 검증 정책', value: 'mvp-health-v1' },
+    { label: '기관 요청 기준', value: '보험 리워드, 건강 코칭' },
+    { label: '반복 안전화 규칙', value: '상세 위치와 정밀 시간 제외' },
+    { label: '최근 policy memory', value: 'mvp-health-v1' },
   ]
 
   return (
@@ -1898,7 +2409,7 @@ function AgentManagement() {
       <Card>
         <CardHeader>
           <CardTitle>Agent 상태</CardTitle>
-          <CardDescription>내 데이터 제공 전에 정책과 동의 범위를 검토합니다.</CardDescription>
+          <CardDescription>내 헬스케어 마이데이터를 보내기 전에 기관 요청 정책과 개인정보 위험을 검토합니다.</CardDescription>
         </CardHeader>
         <CardContent>
           <View style={styles.statGrid}>
@@ -1912,7 +2423,7 @@ function AgentManagement() {
           <View>
             <Text style={styles.sectionHeading}>Agent memory</Text>
             <Text style={styles.sectionLead}>
-              이전 선택과 선호를 기억하지만, 사용자 승인 없이 동의나 복호화 권한을 만들지 않습니다.
+              정책과 이전 위험 패턴은 기억하지만, 사용자 승인 없이 동의나 복호화 권한을 만들지 않습니다.
             </Text>
             <View style={styles.memoryList}>
               {memoryItems.map((item) => (
@@ -1929,7 +2440,7 @@ function AgentManagement() {
       <Card>
         <CardHeader>
           <CardTitle>검증 체크</CardTitle>
-          <CardDescription>업로드 전 Agent가 확인하는 항목</CardDescription>
+          <CardDescription>기업 요청에 맞게 안전화됐는지 업로드 전에 확인합니다</CardDescription>
         </CardHeader>
         <CardContent>
           {agentChecks.map((check) => (
@@ -2000,7 +2511,7 @@ const styles = StyleSheet.create({
   accessLogActionRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     paddingTop: 2,
   },
   accessLogData: {
@@ -2011,6 +2522,53 @@ const styles = StyleSheet.create({
   },
   accessLogDataBlock: {
     gap: 4,
+  },
+  accessEventContent: {
+    flex: 1,
+    gap: 3,
+    minWidth: 0,
+  },
+  accessEventDetail: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  accessEventDot: {
+    backgroundColor: '#f5c26f',
+    borderRadius: 5,
+    height: 10,
+    marginTop: 4,
+    width: 10,
+  },
+  accessEventDotSuccess: {
+    backgroundColor: colors.primary,
+  },
+  accessEventHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    justifyContent: 'space-between',
+  },
+  accessEventLabel: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  accessEventList: {
+    gap: 10,
+  },
+  accessEventRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 9,
+  },
+  accessEventTime: {
+    color: colors.muted,
+    flexShrink: 0,
+    fontSize: 12,
+    lineHeight: 16,
   },
   accessLogDate: {
     color: colors.text,
@@ -2036,6 +2594,10 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     overflow: 'hidden',
+  },
+  accessLogItemReviewPending: {
+    backgroundColor: colors.accent,
+    borderColor: '#f5c26f',
   },
   accessLogList: {
     gap: 8,
@@ -2332,6 +2894,130 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  confirmModalBackdrop: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(18, 29, 24, 0.38)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 18,
+  },
+  confirmModalBody: {
+    gap: 14,
+    padding: 16,
+  },
+  confirmModalCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    maxWidth: 520,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  confirmModalFooter: {
+    backgroundColor: colors.surface,
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'flex-end',
+    padding: 16,
+  },
+  confirmModalHeader: {
+    alignItems: 'flex-start',
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    gap: 14,
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  confirmModalTitle: {
+    color: colors.text,
+    fontSize: 19,
+    fontWeight: '700',
+    lineHeight: 25,
+  },
+  loadingModalBackdrop: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(18, 29, 24, 0.46)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  loadingModalCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    gap: 12,
+    maxWidth: 420,
+    padding: 20,
+    width: '100%',
+  },
+  loadingModalDetail: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  loadingModalTitle: {
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: '700',
+    lineHeight: 26,
+  },
+  loadingProgressBlock: {
+    paddingTop: 4,
+  },
+  loadingProgressHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  loadingProgressValue: {
+    color: colors.primary,
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
+  loadingStepDot: {
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    height: 18,
+    justifyContent: 'center',
+    width: 18,
+  },
+  loadingStepDotActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  loadingStepDotComplete: {
+    backgroundColor: colors.successText,
+    borderColor: colors.successText,
+  },
+  loadingStepList: {
+    gap: 8,
+    paddingTop: 4,
+  },
+  loadingStepRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 9,
+    minHeight: 22,
+  },
+  loadingStepText: {
+    color: colors.muted,
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
+  },
+  loadingStepTextActive: {
+    color: colors.primary,
+  },
+  loadingStepTextComplete: {
+    color: colors.text,
+  },
   calendarDayBlank: {
     backgroundColor: 'transparent',
   },
@@ -2561,6 +3247,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'nowrap',
     gap: 7,
+  },
+  healthEmptyState: {
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: 6,
+    minHeight: 190,
+    justifyContent: 'center',
+    padding: 18,
+  },
+  healthEmptyText: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: 'center',
+  },
+  healthEmptyTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+    lineHeight: 20,
+    textAlign: 'center',
   },
   homeMetricHeader: {
     alignItems: 'center',
@@ -3053,6 +3763,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 4,
   },
+  rewardSummaryWalletText: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 15,
+  },
   requiredDataLabel: {
     color: colors.text,
     flexShrink: 0,
@@ -3116,6 +3832,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
   },
+  errorText: {
+    color: colors.danger,
+    fontWeight: '700',
+  },
   detailPill: {
     alignItems: 'center',
     borderColor: colors.border,
@@ -3134,6 +3854,10 @@ const styles = StyleSheet.create({
   },
   selectedCard: {
     borderColor: colors.primary,
+  },
+  reviewPendingCard: {
+    backgroundColor: colors.accent,
+    borderColor: '#f5c26f',
   },
   serviceCardContent: {
     gap: 14,
@@ -3174,6 +3898,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingTop: 12,
   },
+  serviceRewardRowReviewPending: {
+    borderTopColor: '#f5c26f',
+  },
   statCard: {
     borderColor: colors.border,
     borderRadius: radii.md,
@@ -3187,6 +3914,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+  },
+  successText: {
+    color: '#12804a',
+    fontWeight: '700',
   },
   statLabel: {
     color: colors.text,
