@@ -2,7 +2,7 @@
 
 현재 데모 포지셔닝: **Policy-Adaptive Healthcare MyData Privacy Agent**.
 
-최근 의료 및 헬스케어 마이데이터가 빠르게 늘고 있고, 보험, 리워드, 건강 코칭, 임상 연구 기업들은 사용자가 직접 보내는 건강 데이터를 활용하려고 한다. 문제는 데이터 전송 권한이 개인에게 열릴수록, 각 기업의 요청사항에 맞게 데이터를 안전하게 가공하고 개인정보 유출을 막는 일이 어려워진다는 점이다.
+최근 의료 및 헬스케어 마이데이터가 빠르게 늘고 있다. 이 데이터는 wearable/Apple Health 데이터에만 그치지 않고 sleep/recovery 데이터, activity 데이터, medical records까지 포함한다. precision medicine 기업은 개인화 치료와 위험 모델링을 위해 이런 데이터가 필요하고, insurance wellness 기업은 리워드와 예방 관리 프로그램을 위해 필요로 한다. 문제는 데이터 전송 권한이 개인에게 열릴수록, 각 기업의 요청사항에 맞게 데이터를 안전하게 가공하고 개인정보 유출을 막는 일이 어려워진다는 점이다.
 
 MODi는 이 지점을 AI Agent workflow로 해결한다. 기관은 연구나 서비스 목적에 맞는 `policy_pack`을 Walrus에 publish하고, user-app은 그 정책을 읽어 로컬에서 먼저 가명처리한다. platform Privacy/Security Agent는 같은 Walrus policy memory와 과거에 학습한 `security_memory`를 다시 읽어, 사용자가 보낸 payload가 최신 정책과 안전 기준을 만족하는지 검증한다.
 
@@ -11,6 +11,22 @@ MODi는 이 지점을 AI Agent workflow로 해결한다. 기관은 연구나 서
 Seal은 production Roadmap이다. 데모에서는 local encryption/decryption과 Security Agent audit trail을 보여준다.
 
 구체적인 데모 시나리오와 실제 원격 검증 결과는 [`SECURITY_AGENT_DEMO_FLOW.md`](./SECURITY_AGENT_DEMO_FLOW.md)에 정리했다.
+
+## Live Demo Priority
+
+라이브 데모에서는 모든 기술 요소를 같은 비중으로 설명하지 않는다.
+
+심사위원이 기억해야 할 흐름은 단순해야 한다.
+
+1. Institution creates a healthcare data request.
+2. MODi turns the request into a Walrus policy memory.
+3. User submits health data from the user app.
+4. User app pseudonymizes locally.
+5. Privacy Agent verifies and asks for safer edits if needed.
+6. Walrus stores the encrypted dataset and audit trail.
+7. Security Memory lets the agent remember previous privacy risks.
+
+데모 중 `Slush`, `Sui`, `Seal`, `DataRequest`, `AccessGrant`는 핵심 흐름이 아니다. 질문이 들어오면 production roadmap 또는 technical backup으로만 설명한다.
 
 ## Core Message
 
@@ -31,8 +47,8 @@ MODi는 헬스케어 마이데이터를 단순 업로드하는 앱이 아니다.
 
 데모의 문제 정의는 다음이다.
 
-1. 헬스케어 마이데이터가 확산되면서 개인이 기업에 직접 건강 데이터를 보낼 수 있게 된다.
-2. 기업마다 필요한 데이터 범위와 처리 정책이 다르다.
+1. 헬스케어 마이데이터가 확산되면서 개인이 wearable data와 medical records를 기업에 직접 보낼 수 있게 된다.
+2. precision medicine, insurance wellness 같은 기업마다 필요한 데이터 범위와 처리 정책이 다르다.
 3. 사용자가 매번 그 차이를 이해하고 안전하게 가공하기는 어렵다.
 4. 서버가 원본 데이터를 받아서 처리하면 개인정보 유출 위험이 커진다.
 5. 정책과 요청사항은 계속 바뀌므로, 고정된 앱 로직만으로는 유지하기 어렵다.

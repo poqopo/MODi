@@ -52,7 +52,7 @@ async function resolveWalrusDownloadUrlWithRetry({
   ]
 
   if (urls.length === 0) {
-    throw new Error('Walrus blob ID가 없어 다운로드할 수 없습니다.')
+    throw new Error('Cannot download because the Walrus blob ID is missing.')
   }
 
   let lastErrorMessage = ''
@@ -72,7 +72,7 @@ async function resolveWalrusDownloadUrlWithRetry({
       lastErrorMessage = readWalrusErrorMessage(responseText) || response.statusText
 
       if (response.status !== 404 && response.status !== 429 && response.status < 500) {
-        throw new Error(`Walrus blob 다운로드에 실패했습니다. ${lastErrorMessage}`)
+        throw new Error(`Failed to download the Walrus blob. ${lastErrorMessage}`)
       }
     }
 
@@ -82,11 +82,11 @@ async function resolveWalrusDownloadUrlWithRetry({
   }
 
   if (lastStatus === 404) {
-    throw new Error('Walrus blob을 찾지 못했습니다. testnet blob이 만료됐거나 아직 전파되지 않았을 수 있으니 참가자가 user-app에서 데이터를 다시 제출해야 합니다.')
+    throw new Error('Walrus blob was not found. The testnet blob may have expired or not propagated yet; ask the participant to submit again from the user app.')
   }
 
   throw new Error(
-    `Walrus blob 다운로드에 실패했습니다. 잠시 후 다시 시도해 주세요. ${lastErrorMessage}`,
+    `Failed to download the Walrus blob. Please try again shortly. ${lastErrorMessage}`,
   )
 }
 
@@ -104,7 +104,7 @@ async function fetchWalrusHeaders(url: string) {
     })
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error('Walrus aggregator 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.', { cause: error })
+      throw new Error('Walrus aggregator response is delayed. Please try again shortly.', { cause: error })
     }
 
     throw error
@@ -126,13 +126,13 @@ async function fetchWalrusBlob(url: string) {
     if (!response.ok) {
       const responseText = await response.text().catch(() => '')
       const errorMessage = readWalrusErrorMessage(responseText) || response.statusText
-      throw new Error(`Walrus blob 다운로드에 실패했습니다. ${errorMessage}`)
+      throw new Error(`Failed to download the Walrus blob. ${errorMessage}`)
     }
 
     return await response.blob()
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error('Walrus blob 다운로드 시간이 초과됐습니다. 잠시 후 다시 시도해 주세요.', { cause: error })
+      throw new Error('Walrus blob download timed out. Please try again shortly.', { cause: error })
     }
 
     throw error

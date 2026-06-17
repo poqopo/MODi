@@ -91,22 +91,22 @@ function mapRecruitingProject(row: RecruitingProjectRow): ResearchRequest {
   return {
     id: publicCode,
     title: row.title,
-    description: row.description ?? `${row.title} 참여자를 모집합니다.`,
+    description: row.description ?? `${row.title} is recruiting participants.`,
     organization: row.institutions?.name ?? 'MODi Research Network',
     category,
     categoryLabel: getCategoryLabel(category),
-    purposeLabel: row.purpose ?? '건강 데이터 연구',
+    purposeLabel: row.purpose ?? 'Health Data Study',
     reward: `${formatNumber(rewardAmount)} ${rewardCurrency}`,
     rewardValue: rewardAmount.toFixed(2),
-    escrowStatus: rewardAmount > 0 ? 'RewardEscrow 예치 완료' : 'RewardEscrow 준비 중',
+    escrowStatus: rewardAmount > 0 ? 'RewardEscrow funded' : 'RewardEscrow pending',
     requiredAgeRanges: getAgeRanges(row.project_age_ranges),
     requiredConditionTags: requiredConditionTags.length > 0 ? requiredConditionTags : ['health_record'],
     allowedUse: inferAllowedUse(row.purpose, category),
     retentionDays: Number(row.access_period_days ?? 60),
-    accessWindow: `${Math.min(Number(row.access_period_days ?? 60), 14)}일`,
+    accessWindow: `${Math.min(Number(row.access_period_days ?? 60), 14)} days`,
     expiresAt: formatDate(row.recruitment_ends_at),
     matchScore: inferMatchScore(category),
-    participants: `${Number(row.target_participants ?? 0).toLocaleString('ko-KR')}명 모집`,
+    participants: `${Number(row.target_participants ?? 0).toLocaleString('en-US')} participants targeted`,
     policyPackBlobId: row.policy_pack_blob_id,
     policyPackHash: row.policy_pack_hash,
     policyPackObjectId: row.policy_pack_object_id,
@@ -117,7 +117,7 @@ function mapRecruitingProject(row: RecruitingProjectRow): ResearchRequest {
     securityMemoryUpdatedAt: row.security_memory_updated_at,
     securityMemoryVersion: row.security_memory_version,
     sealPolicyId: row.seal_policy_id,
-    status: '승인 가능',
+    status: 'Ready to Join',
   }
 }
 
@@ -129,15 +129,15 @@ function getAgeRanges(rows: RecruitingProjectRow['project_age_ranges']) {
 function inferCategory(purpose: string | null, title: string, dataScope: string[]): ProjectCategory {
   const text = `${purpose ?? ''} ${title} ${dataScope.join(' ')}`.toLowerCase()
 
-  if (text.includes('수면') || text.includes('코칭') || text.includes('sleep')) {
+  if (text.includes('sleep') || text.includes('wellness') || text.includes('mindfulness')) {
     return 'coaching'
   }
 
-  if (text.includes('심혈관') || text.includes('병원') || text.includes('care') || text.includes('hrv')) {
+  if (text.includes('cardiovascular') || text.includes('care') || text.includes('hospital') || text.includes('hrv')) {
     return 'care'
   }
 
-  if (text.includes('리워드') || text.includes('보험') || text.includes('reward') || text.includes('insurance')) {
+  if (text.includes('reward') || text.includes('insurance') || text.includes('incentive')) {
     return 'insurance'
   }
 
@@ -157,7 +157,7 @@ function inferAllowedUse(purpose: string | null, category: ProjectCategory) {
     return 'remote_monitoring'
   }
 
-  if ((purpose ?? '').includes('집계')) {
+  if ((purpose ?? '').toLowerCase().includes('aggregate')) {
     return 'aggregate_research'
   }
 
@@ -166,18 +166,18 @@ function inferAllowedUse(purpose: string | null, category: ProjectCategory) {
 
 function getCategoryLabel(category: ProjectCategory) {
   if (category === 'insurance') {
-    return '보험 리워드'
+    return 'Insurance Rewards'
   }
 
   if (category === 'coaching') {
-    return '건강 코칭'
+    return 'Health Coaching'
   }
 
   if (category === 'care') {
-    return '병원 모니터링'
+    return 'Clinical Monitoring'
   }
 
-  return '기업 웰니스'
+  return 'Corporate Wellness'
 }
 
 function inferMatchScore(category: ProjectCategory) {
@@ -198,10 +198,10 @@ function inferMatchScore(category: ProjectCategory) {
 
 function formatDate(value: string | null) {
   if (!value) {
-    return '상시 모집'
+    return 'Always recruiting'
   }
 
-  return new Intl.DateTimeFormat('ko-KR', {
+  return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -209,7 +209,7 @@ function formatDate(value: string | null) {
 }
 
 function formatNumber(value: number) {
-  return value.toLocaleString('ko-KR', { maximumFractionDigits: value >= 10 ? 0 : 2 })
+  return value.toLocaleString('en-US', { maximumFractionDigits: value >= 10 ? 0 : 2 })
 }
 
 function typedRows<T>(rows: unknown): T[] {

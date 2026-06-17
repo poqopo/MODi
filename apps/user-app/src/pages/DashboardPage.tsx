@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
 import {
   Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -93,14 +94,14 @@ type DashboardPageProps = {
 }
 
 const navItems: Array<{ id: DashboardTab; label: string; icon: LucideIcon }> = [
-  { id: 'home', label: '홈', icon: Activity },
-  { id: 'projects', label: '프로젝트', icon: ClipboardList },
-  { id: 'my-projects', label: '내 프로젝트', icon: CheckCircle2 },
+  { id: 'home', label: 'Home', icon: Activity },
+  { id: 'projects', label: 'Projects', icon: ClipboardList },
+  { id: 'my-projects', label: 'My Projects', icon: CheckCircle2 },
 ]
 
 const defaultSubmissionProgress: ParticipantSubmissionProgress = {
-  detail: '연구 요청 범위와 제출 기간을 계산하고 있습니다.',
-  label: '제출 준비중',
+  detail: 'Calculating the study request scope and submission period.',
+  label: 'Preparing submission',
   progress: 4,
   stage: 'preparing',
 }
@@ -110,11 +111,11 @@ const submissionProgressSteps: Array<{
   stages: ParticipantSubmissionProgressStage[]
 }> = [
   {
-    label: '로컬 가명처리',
+    label: 'Local Pseudonymization',
     stages: ['preparing', 'policy-loading', 'security-memory-loading', 'pseudonymizing'],
   },
   {
-    label: 'Privacy Agent 검증',
+    label: 'Privacy Agent Verification',
     stages: ['verifying', 'hardening', 'reverifying', 'verified'],
   },
   {
@@ -122,58 +123,58 @@ const submissionProgressSteps: Array<{
     stages: ['agent-memory-uploading', 'security-memory-updating'],
   },
   {
-    label: '암호화',
+    label: 'Encryption',
     stages: ['encrypting'],
   },
   {
-    label: 'Walrus 제출',
+    label: 'Walrus Submission',
     stages: ['walrus-uploading', 'tx-verifying', 'registering', 'complete'],
   },
 ]
 
 const initialHealthTodos: HealthTodo[] = [
-  { id: 'steps', label: '8,000보 이상 걷기', value: '8,426보', done: true },
-  { id: 'sleep', label: '7시간 이상 수면', value: '7.2시간', done: true },
-  { id: 'heart', label: '심박수 재기', value: '아직 안 함', done: false },
-  { id: 'water', label: '물 6잔 마시기', value: '4 / 6잔', done: false },
+  { id: 'steps', label: 'Walk at least 8,000 steps', value: '8,426steps', done: true },
+  { id: 'sleep', label: 'Sleep at least 7 hours', value: '7.2 hours', done: true },
+  { id: 'heart', label: 'Measure heart rate', value: 'Not yet', done: false },
+  { id: 'water', label: 'Drink 6 cups of water', value: '4 / 6cups', done: false },
 ]
 
 const notificationItems: NotificationItem[] = [
   {
-    detail: 'BetterSleep Coaching 요청이 데이터 검토 단계로 이동했습니다.',
+    detail: 'The BetterSleep Coaching request moved into data review.',
     id: 'notice-sleep-review',
-    time: '방금',
-    title: '수면 코칭 데이터 검토',
+    time: 'Just now',
+    title: 'Sleep Coaching Data Review',
     unread: true,
   },
   {
-    detail: 'Sui Active Insurance 보상 escrow가 확인되었습니다.',
+    detail: 'Sui Active Insurance reward escrow has been confirmed.',
     id: 'notice-reward-ready',
-    time: '12분 전',
-    title: '보상 조건 확인',
+    time: '12 minutes ago',
+    title: 'Reward Conditions Confirmed',
     unread: true,
   },
   {
-    detail: '웨어러블 제공 스키마가 Apple Health 데이터 범위에 맞게 업데이트되었습니다.',
+    detail: 'The wearable sharing schema was updated to match the Apple Health data scope.',
     id: 'notice-schema',
-    time: '오늘',
-    title: '데이터 정책 업데이트',
+    time: 'Today',
+    title: 'Data Policy Updated',
   },
 ]
 
 const appleHealthFallbackMetrics: HomeMetric[] = [
   {
-    detail: '안정시 범위',
+    detail: 'Resting range',
     icon: HeartPulse,
-    label: '심박수',
+    label: 'Heart rate',
     progress: 72,
     unit: 'bpm',
     value: '72',
   },
   {
-    detail: '오늘 누적',
+    detail: 'Today total',
     icon: Flame,
-    label: '휴식 에너지',
+    label: 'Resting energy',
     progress: 78,
     unit: 'kcal',
     value: '1,420',
@@ -187,13 +188,13 @@ const homeProfileFallback = {
 }
 
 const sleepCycleSegments = [
-  { color: '#bcd7ff', flex: 18, height: 28, label: '얕은 수면', time: '23:40' },
+  { color: '#bcd7ff', flex: 18, height: 28, label: 'Light sleep', time: '23:40' },
   { color: '#7ea7f8', flex: 15, height: 40, label: 'REM', time: '00:45' },
-  { color: '#2947a9', flex: 22, height: 54, label: '깊은 수면', time: '01:40' },
-  { color: '#bcd7ff', flex: 18, height: 30, label: '얕은 수면', time: '03:05' },
+  { color: '#2947a9', flex: 22, height: 54, label: 'Deep sleep', time: '01:40' },
+  { color: '#bcd7ff', flex: 18, height: 30, label: 'Light sleep', time: '03:05' },
   { color: '#7ea7f8', flex: 13, height: 42, label: 'REM', time: '04:20' },
-  { color: '#f5c26f', flex: 6, height: 22, label: '깸', time: '05:18' },
-  { color: '#bcd7ff', flex: 18, height: 28, label: '얕은 수면', time: '05:40' },
+  { color: '#f5c26f', flex: 6, height: 22, label: 'Awake', time: '05:18' },
+  { color: '#bcd7ff', flex: 18, height: 28, label: 'Light sleep', time: '05:40' },
 ]
 
 export function DashboardPage({
@@ -224,7 +225,7 @@ export function DashboardPage({
     } catch (error) {
       setProjectRequests(researchRequests)
       setProjectLoadStatus('error')
-      setProjectLoadMessage(error instanceof Error ? error.message : '프로젝트를 불러오지 못했습니다.')
+      setProjectLoadMessage(error instanceof Error ? error.message : 'Could not load projects.')
     }
   }, [])
 
@@ -243,7 +244,7 @@ export function DashboardPage({
     } catch (error) {
       setUserApplications([])
       setApplicationLoadStatus('error')
-      setApplicationLoadMessage(error instanceof Error ? error.message : '내 프로젝트를 불러오지 못했습니다.')
+      setApplicationLoadMessage(error instanceof Error ? error.message : 'Could not load My Projects.')
     }
   }, [activeUserId])
 
@@ -287,7 +288,7 @@ export function DashboardPage({
       void refreshUserApplications()
     } catch (error) {
       setApplicationLoadStatus('error')
-      setApplicationLoadMessage(error instanceof Error ? error.message : '참여 신청을 저장하지 못했습니다.')
+      setApplicationLoadMessage(error instanceof Error ? error.message : 'Could not save the application.')
     } finally {
       setJoiningProjectId(null)
     }
@@ -342,7 +343,7 @@ function DashboardShell({
     <SafeAreaView style={styles.screen}>
       {showsNotifications ? (
         <Pressable
-          accessibilityLabel="알림함 열기"
+          accessibilityLabel="Open notifications"
           accessibilityRole="button"
           onPress={() => setNotificationsVisible(true)}
           style={({ pressed }) => [styles.notificationButton, pressed ? styles.pressed : null]}
@@ -384,10 +385,10 @@ function NotificationInboxModal({
       <SafeAreaView style={styles.modalScreen}>
         <View style={styles.modalHeader}>
           <View style={styles.modalTitleGroup}>
-            <Text style={styles.modalTitle}>알림함</Text>
-            <Text style={styles.itemMeta}>데이터 요청, 동의, 보상 진행 상태</Text>
+            <Text style={styles.modalTitle}>Notifications</Text>
+            <Text style={styles.itemMeta}>Data requests, consent, and reward progress</Text>
           </View>
-          <Pressable accessibilityLabel="닫기" accessibilityRole="button" onPress={onClose} style={styles.iconButton}>
+          <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={onClose} style={styles.iconButton}>
             <X color={colors.text} size={20} strokeWidth={2.2} />
           </Pressable>
         </View>
@@ -472,6 +473,8 @@ function HomePage() {
   const [hasRequestedHealthSync, setHasRequestedHealthSync] = useState(false)
   const [healthMessage, setHealthMessage] = useState<string | null>(null)
   const [healthSyncStatus, setHealthSyncStatus] = useState<AppleHealthSyncStatus>('idle')
+  const [isWebHealthNoticeVisible, setIsWebHealthNoticeVisible] = useState(Platform.OS === 'web')
+  const isWebHealthDemo = Platform.OS === 'web'
   const isAppleHealthConnected = appleHealthSnapshot !== null
   const shouldShowHealthData = hasRequestedHealthSync && (healthSyncStatus !== 'syncing' || isAppleHealthConnected)
   const appleHealthMetrics = appleHealthSnapshot
@@ -483,9 +486,17 @@ function HomePage() {
   const activitySteps = appleHealthSnapshot?.steps ?? (shouldShowHealthData ? 8426 : 0)
 
   const syncAppleHealth = useCallback(async () => {
+    setIsWebHealthNoticeVisible(false)
     setHasRequestedHealthSync(true)
     setHealthMessage(null)
     setHealthSyncStatus('syncing')
+
+    if (isWebHealthDemo) {
+      setAppleHealthSnapshot(null)
+      setHealthMessage('Web demo mode: example healthcare data is loaded because browser apps cannot read Apple Health.')
+      setHealthSyncStatus('unsupported')
+      return
+    }
 
     const result = await fetchAppleHealthSnapshot()
 
@@ -504,7 +515,7 @@ function HomePage() {
 
     setHealthMessage(result.error)
     setHealthSyncStatus('error')
-  }, [])
+  }, [isWebHealthDemo])
 
   return (
     <View style={styles.homePage}>
@@ -521,14 +532,14 @@ function HomePage() {
                   <Button
                     icon={RefreshCw}
                     disabled={healthSyncStatus === 'syncing'}
-                    label={healthSyncStatus === 'syncing' ? '동기화 중' : '새로고침'}
+                    label={healthSyncStatus === 'syncing' ? 'Syncing' : 'Refresh'}
                     onPress={syncAppleHealth}
                     size="sm"
                     variant="secondary"
                   />
                 </View>
                 <Text numberOfLines={1} style={styles.profileMeta}>
-                  키 {healthProfile.heightLabel} · 몸무게 {healthProfile.weightLabel}
+                  Height {healthProfile.heightLabel} · Weight {healthProfile.weightLabel}
                 </Text>
                 <Text numberOfLines={1} style={styles.profileStatus}>
                   {getAppleHealthHeaderMessage({
@@ -556,12 +567,35 @@ function HomePage() {
             </>
           ) : (
             <View style={styles.healthEmptyState}>
-              <Text style={styles.healthEmptyTitle}>건강 데이터 대기 중</Text>
-              <Text style={styles.healthEmptyText}>아직 표시할 건강 데이터가 없습니다.</Text>
+              <Text style={styles.healthEmptyTitle}>Waiting for health data</Text>
+              <Text style={styles.healthEmptyText}>No health data to display yet.</Text>
             </View>
           )}
         </CardContent>
       </Card>
+
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setIsWebHealthNoticeVisible(false)}
+        transparent
+        visible={isWebHealthNoticeVisible}
+      >
+        <View style={styles.webHealthNoticeBackdrop}>
+          <View style={styles.webHealthNoticeCard}>
+            <View style={styles.webHealthNoticeIcon}>
+              <HeartPulse color={colors.primary} size={24} strokeWidth={2.3} />
+            </View>
+            <Text style={styles.webHealthNoticeTitle}>Web Demo Health Data</Text>
+            <Text style={styles.webHealthNoticeText}>
+              This browser demo cannot read Apple Health directly. Tap Refresh to load example healthcare data for the demo flow.
+            </Text>
+            <View style={styles.webHealthNoticeActions}>
+              <Button label="Close" onPress={() => setIsWebHealthNoticeVisible(false)} size="md" variant="secondary" />
+              <Button icon={RefreshCw} label="Refresh" onPress={syncAppleHealth} size="md" />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -580,8 +614,8 @@ function RewardSummaryCard({ metric, walletAddress }: { metric: HomeMetric; wall
           <Text style={styles.metricLabel}>{metric.label}</Text>
           <Text numberOfLines={1} style={styles.measurementDetail}>{metric.detail}</Text>
           {compactWalletAddress ? (
-            <Text accessibilityLabel={`내 지갑 주소 ${walletAddress}`} numberOfLines={1} style={styles.rewardSummaryWalletText}>
-              내 지갑 {compactWalletAddress}
+            <Text accessibilityLabel={`My wallet address ${walletAddress}`} numberOfLines={1} style={styles.rewardSummaryWalletText}>
+              My wallet {compactWalletAddress}
             </Text>
           ) : null}
         </View>
@@ -596,21 +630,21 @@ function RewardSummaryCard({ metric, walletAddress }: { metric: HomeMetric; wall
 
 function ActivityGraph({ steps, syncedAt }: { steps: number; syncedAt?: Date }) {
   const graphValues = createActivityGraphValues(steps)
-  const activityDetail = syncedAt ? `${formatClock(syncedAt)} 동기화` : '오늘 걸음 수'
+  const activityDetail = syncedAt ? `${formatClock(syncedAt)} synced` : 'Today Step count'
 
   return (
     <View style={styles.sleepCyclePanel}>
       <View style={styles.sleepCycleHeader}>
         <View style={styles.sleepSummaryValueBlock}>
-          <Text style={styles.metricLabel}>운동</Text>
+          <Text style={styles.metricLabel}>Activity</Text>
           <View style={styles.sleepSummaryValueRow}>
-            <Text style={styles.sleepSummaryValue}>{steps.toLocaleString('ko-KR')}</Text>
-            <Text style={styles.homeMetricUnit}>보</Text>
+            <Text style={styles.sleepSummaryValue}>{steps.toLocaleString('en-US')}</Text>
+            <Text style={styles.homeMetricUnit}>steps</Text>
           </View>
         </View>
         <View style={styles.sleepSummaryCopy}>
           <Text numberOfLines={1} style={styles.measurementDetail}>{activityDetail}</Text>
-          <Text numberOfLines={1} style={styles.measurementDetail}>일일 목표 10,000보 기준</Text>
+          <Text numberOfLines={1} style={styles.measurementDetail}>Based on a daily goal of 10,000 steps</Text>
         </View>
       </View>
 
@@ -629,8 +663,8 @@ function ActivityGraph({ steps, syncedAt }: { steps: number; syncedAt?: Date }) 
       </View>
 
       <View style={styles.sleepCycleLegend}>
-        <SleepCycleLegend color={colors.primary} label="걸음" />
-        <SleepCycleLegend color="#d8e0e8" label="목표" />
+        <SleepCycleLegend color={colors.primary} label="Steps" />
+        <SleepCycleLegend color="#d8e0e8" label="Goal" />
       </View>
     </View>
   )
@@ -639,18 +673,18 @@ function ActivityGraph({ steps, syncedAt }: { steps: number; syncedAt?: Date }) 
 function SleepCycleGraph({ sleep }: { sleep?: AppleHealthSnapshot['sleep'] }) {
   const sleepStart = sleep?.startDate
   const sleepEnd = sleep?.endDate
-  const sleepRange = sleep ? (sleepStart && sleepEnd ? `${formatClock(sleepStart)} - ${formatClock(sleepEnd)}` : '수면 데이터 없음') : '23:40 - 07:02'
+  const sleepRange = sleep ? (sleepStart && sleepEnd ? `${formatClock(sleepStart)} - ${formatClock(sleepEnd)}` : 'Sleep No data') : '23:40 - 07:02'
   const sleepHours = sleep ? formatHours(sleep.totalMinutes) : '7.2'
-  const sleepDetail = sleep?.deepMinutes ? `깊은 수면 ${formatHours(sleep.deepMinutes)}` : '수면 주기 분석'
+  const sleepDetail = sleep?.deepMinutes ? `Deep sleep ${formatHours(sleep.deepMinutes)}` : 'Sleep cycle analysis'
 
   return (
     <View style={styles.sleepCyclePanel}>
       <View style={styles.sleepCycleHeader}>
         <View style={styles.sleepSummaryValueBlock}>
-          <Text style={styles.metricLabel}>수면</Text>
+          <Text style={styles.metricLabel}>Sleep</Text>
           <View style={styles.sleepSummaryValueRow}>
             <Text style={styles.sleepSummaryValue}>{sleepHours}</Text>
-            <Text style={styles.homeMetricUnit}>시간</Text>
+            <Text style={styles.homeMetricUnit}>hours</Text>
           </View>
         </View>
         <View style={styles.sleepSummaryCopy}>
@@ -686,10 +720,10 @@ function SleepCycleGraph({ sleep }: { sleep?: AppleHealthSnapshot['sleep'] }) {
       </View>
 
       <View style={styles.sleepCycleLegend}>
-        <SleepCycleLegend color="#2947a9" label="깊은" />
+        <SleepCycleLegend color="#2947a9" label="Deep" />
         <SleepCycleLegend color="#7ea7f8" label="REM" />
-        <SleepCycleLegend color="#bcd7ff" label="얕은" />
-        <SleepCycleLegend color="#f5c26f" label="깸" />
+        <SleepCycleLegend color="#bcd7ff" label="Light" />
+        <SleepCycleLegend color="#f5c26f" label="Awake" />
       </View>
     </View>
   )
@@ -731,21 +765,21 @@ function HomeMetricCard({
 
 function getAppleHealthMetrics(snapshot: AppleHealthSnapshot): HomeMetric[] {
   const heartRateValue = snapshot.heartRate ? `${snapshot.heartRate.bpm}` : '--'
-  const restingEnergyValue = snapshot.restingEnergyKcal ? snapshot.restingEnergyKcal.toLocaleString('ko-KR') : '--'
+  const restingEnergyValue = snapshot.restingEnergyKcal ? snapshot.restingEnergyKcal.toLocaleString('en-US') : '--'
 
   return [
     {
-      detail: snapshot.heartRate ? `${formatClock(snapshot.heartRate.measuredAt)} 측정` : '최근 측정 없음',
+      detail: snapshot.heartRate ? `${formatClock(snapshot.heartRate.measuredAt)} measured` : 'No recent measurement',
       icon: HeartPulse,
-      label: '심박수',
+      label: 'Heart rate',
       progress: clampProgress(snapshot.heartRate?.bpm ?? 0),
       unit: 'bpm',
       value: heartRateValue,
     },
     {
-      detail: snapshot.restingEnergyKcal ? '오늘 누적' : '데이터 없음',
+      detail: snapshot.restingEnergyKcal ? 'Today total' : 'No data',
       icon: Flame,
-      label: '휴식 에너지',
+      label: 'Resting energy',
       progress: clampProgress(((snapshot.restingEnergyKcal ?? 0) / 1800) * 100),
       unit: 'kcal',
       value: restingEnergyValue,
@@ -754,13 +788,13 @@ function getAppleHealthMetrics(snapshot: AppleHealthSnapshot): HomeMetric[] {
 }
 
 function getReceivedRewardMetric(records: ParticipationRecord[]): HomeMetric {
-  const paidRecords = records.filter((record) => getDataProvisionLogs(record).some((entry) => entry.status === '리워드 지급 완료'))
+  const paidRecords = records.filter((record) => getDataProvisionLogs(record).some((entry) => entry.status === 'Reward Paid'))
   const totalReward = paidRecords.reduce((sum, record) => sum + Number(record.rewardValue), 0)
 
   return {
-    detail: `지급 완료 ${paidRecords.length}건`,
+    detail: `Paid ${paidRecords.length}`,
     icon: Wallet,
-    label: '받은 리워드',
+    label: 'Rewards Received',
     progress: clampProgress((totalReward / 30) * 100),
     unit: 'SUI',
     value: formatCompactNumber(totalReward),
@@ -805,11 +839,11 @@ function getAppleHealthHeaderMessage({
   snapshot: AppleHealthSnapshot | null
   status: AppleHealthSyncStatus
 }) {
-  if (status === 'syncing') return 'Apple 건강정보 권한과 데이터를 확인하는 중입니다.'
-  if (!hasRequestedSync) return '새로고침 전에는 건강 데이터를 표시하지 않습니다.'
+  if (status === 'syncing') return 'Checking Apple Health permissions and data.'
+  if (!hasRequestedSync) return 'Health data is hidden until you refresh.'
   if (healthMessage) return healthMessage
-  if (isConnected && snapshot) return `${formatClock(snapshot.syncedAt)} 동기화`
-  return '운동, 수면, 심박수, 휴식 에너지를 가져옵니다.'
+  if (isConnected && snapshot) return `${formatClock(snapshot.syncedAt)} synced`
+  return 'Fetching activity, sleep, heart rate, and resting energy.'
 }
 
 function getHealthProfile(snapshot: AppleHealthSnapshot | null, showFallback: boolean) {
@@ -865,7 +899,7 @@ function HealthPage({
 }) {
   const heartReadings = [72, 76, 74, 78]
   const [heartRateIndex, setHeartRateIndex] = useState(0)
-  const [lastMeasuredAt, setLastMeasuredAt] = useState('오늘 08:12')
+  const [lastMeasuredAt, setLastMeasuredAt] = useState('Today 08:12')
   const heartRate = heartReadings[heartRateIndex]
   const healthCalendarDays: HealthCalendarDay[] = [
     {},
@@ -908,24 +942,24 @@ function HealthPage({
   const measurementCards = [
     {
       icon: Footprints,
-      label: '걸음 수',
+      label: 'Step count',
       value: '8,426',
       unit: 'steps',
-      detail: '목표 10,000보까지 1,574보',
+      detail: '1,574 steps to the 10,000-step goal',
       progress: 84,
     },
     {
       icon: Moon,
-      label: '수면',
+      label: 'Sleep',
       value: '7.2',
       unit: 'hours',
-      detail: '깊은 수면 2.1시간',
+      detail: 'Deep sleep 2.1hours',
       progress: 90,
     },
   ]
   const nextMeasurement = () => {
     setHeartRateIndex((current) => (current + 1) % heartReadings.length)
-    setLastMeasuredAt('방금 측정됨')
+    setLastMeasuredAt('Just measured')
     setHealthTodos((items) =>
       items.map((item) => (item.id === 'heart' ? { ...item, done: true, value: `${heartReadings[(heartRateIndex + 1) % heartReadings.length]} bpm` } : item)),
     )
@@ -937,10 +971,10 @@ function HealthPage({
 
         const nextDone = !item.done
         const valueByState: Record<string, { done: string; pending: string }> = {
-          heart: { done: `${heartRate} bpm`, pending: '아직 안 함' },
-          sleep: { done: '7.2시간', pending: '안 함' },
-          steps: { done: '8,426보', pending: '안 함' },
-          water: { done: '6 / 6잔', pending: '4 / 6잔' },
+          heart: { done: `${heartRate} bpm`, pending: 'Not yet' },
+          sleep: { done: '7.2hours', pending: 'Not done' },
+          steps: { done: '8,426steps', pending: 'Not done' },
+          water: { done: '6 / 6cups', pending: '4 / 6cups' },
         }
         const nextValue = nextDone ? valueByState[item.id].done : valueByState[item.id].pending
 
@@ -967,25 +1001,25 @@ function HealthPage({
               <HeartPulse color={colors.danger} size={22} strokeWidth={2.25} />
             </View>
             <View style={styles.heartCopy}>
-              <Text style={styles.metricLabel}>심박수</Text>
+              <Text style={styles.metricLabel}>Heart rate</Text>
               <Text style={styles.heartStatus}>{lastMeasuredAt}</Text>
             </View>
-            <Badge label="측정 가능" variant="warning" />
+            <Badge label="Ready to measure" variant="warning" />
           </View>
 
           <View style={styles.heartValueRow}>
             <Text style={styles.heartValue}>{heartRate}</Text>
             <Text style={styles.heartUnit}>bpm</Text>
           </View>
-          <Text style={styles.measurementDetail}>손가락을 센서에 올린 상태로 10초간 유지하면 최근 심박수를 기록합니다.</Text>
-          <Button icon={RefreshCw} label="심박수 재기" onPress={nextMeasurement} />
+          <Text style={styles.measurementDetail}>Keep your finger on the sensor for 10 seconds to record the latest heart rate.</Text>
+          <Button icon={RefreshCw} label="Measure heart rate" onPress={nextMeasurement} />
         </CardContent>
       </Card>
 
       <View style={styles.measurementTimeline}>
-        <MeasurementLog label="걸음 수 동기화" value="08:00 업데이트" />
-        <MeasurementLog label="수면 분석 완료" value="수면 효율 91%" />
-        <MeasurementLog label="심박수 기준" value="안정시 범위" />
+        <MeasurementLog label="Step count synced" value="Updated at 08:00" />
+        <MeasurementLog label="Sleep analysis complete" value="Sleep efficiency 91%" />
+        <MeasurementLog label="Heart rate baseline" value="Resting range" />
       </View>
     </View>
   )
@@ -997,7 +1031,7 @@ function HealthTodoList({ onToggle, todos }: { onToggle: (todoId: string) => voi
       <CardContent>
         <View style={styles.todoHeader}>
           <Text style={styles.metricLabel}>Todo</Text>
-          <Badge label={`${todos.filter((todo) => todo.done).length}/${todos.length} 완료`} variant="secondary" />
+          <Badge label={`${todos.filter((todo) => todo.done).length}/${todos.length} Done`} variant="secondary" />
         </View>
         <View style={styles.todoList}>
           {todos.map((todo) => (
@@ -1015,7 +1049,7 @@ function HealthTodoList({ onToggle, todos }: { onToggle: (todoId: string) => voi
                 <Text style={styles.todoLabel}>{todo.label}</Text>
                 <Text style={[styles.todoValue, !todo.done ? styles.todoValuePending : null]}>{todo.value}</Text>
               </View>
-              <Text style={[styles.todoState, !todo.done ? styles.todoStatePending : null]}>{todo.done ? '완료' : '안 함'}</Text>
+              <Text style={[styles.todoState, !todo.done ? styles.todoStatePending : null]}>{todo.done ? 'Done' : 'Not done'}</Text>
             </Pressable>
           ))}
         </View>
@@ -1025,15 +1059,15 @@ function HealthTodoList({ onToggle, todos }: { onToggle: (todoId: string) => voi
 }
 
 function HealthCalendar({ days }: { days: HealthCalendarDay[] }) {
-  const weekdays = ['일', '월', '화', '수', '목', '금', '토']
+  const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
   return (
     <Card>
       <CardContent>
         <View style={styles.calendarHeader}>
           <View>
-            <Text style={styles.metricLabel}>건강관리 달력</Text>
-            <Text style={styles.measurementDetail}>걸음, 수면, 심박수 루틴 완료 기록</Text>
+            <Text style={styles.metricLabel}>Health Calendar</Text>
+            <Text style={styles.measurementDetail}>Steps, Sleep, Heart rate routine completion log</Text>
           </View>
           <Badge label="2026.06" variant="secondary" />
         </View>
@@ -1053,9 +1087,9 @@ function HealthCalendar({ days }: { days: HealthCalendarDay[] }) {
         </View>
 
         <View style={styles.calendarLegend}>
-          <CalendarLegend color="#cdecd7" label="기록 있음" />
-          <CalendarLegend color="#12804a" label="잘함" />
-          <CalendarLegend color="#f5a742" label="빠진 항목" />
+          <CalendarLegend color="#cdecd7" label="Recorded" />
+          <CalendarLegend color="#12804a" label="On track" />
+          <CalendarLegend color="#f5a742" label="Missed item" />
         </View>
       </CardContent>
     </Card>
@@ -1166,10 +1200,10 @@ function BodyPage({ healthTodos }: { healthTodos: HealthTodo[] }) {
           </View>
 
           <View style={styles.bodyScoreBlock}>
-            <Text style={styles.bodyScoreLabel}>오늘의 몸 상태</Text>
+            <Text style={styles.bodyScoreLabel}>Body Status Today</Text>
             <View style={styles.bodyScoreRow}>
               <Text style={styles.bodyScoreValue}>{bodyScore}</Text>
-              <Text style={styles.bodyScoreUnit}>점</Text>
+              <Text style={styles.bodyScoreUnit}>pts</Text>
             </View>
             <Progress value={bodyScore} />
             <Text style={styles.measurementDetail}>{bodyTone.message}</Text>
@@ -1178,14 +1212,14 @@ function BodyPage({ healthTodos }: { healthTodos: HealthTodo[] }) {
       </Card>
 
       <View style={styles.bodyStatusGrid}>
-        <BodyStatusCard label="완료한 루틴" value={`${completedCount}개`} tone="green" />
-        <BodyStatusCard label="남은 루틴" value={`${pendingTodos.length}개`} tone={pendingTodos.length > 0 ? 'orange' : 'green'} />
+        <BodyStatusCard label="Completed routines" value={`${completedCount}`} tone="green" />
+        <BodyStatusCard label="Remaining routines" value={`${pendingTodos.length}`} tone={pendingTodos.length > 0 ? 'orange' : 'green'} />
       </View>
 
       <Card>
         <CardHeader>
-          <CardTitle>몸을 더 좋게 만드는 다음 행동</CardTitle>
-          <CardDescription>건강 탭의 Todo를 완료하면 아바타 컨디션이 올라갑니다.</CardDescription>
+          <CardTitle>Next actions to improve your body status</CardTitle>
+          <CardDescription>Complete Todo items in the Health tab to improve the avatar condition.</CardDescription>
         </CardHeader>
         <CardContent>
           <View style={styles.bodyTodoList}>
@@ -1194,7 +1228,7 @@ function BodyPage({ healthTodos }: { healthTodos: HealthTodo[] }) {
                 <View style={[styles.measurementLogDot, { backgroundColor: todo.done ? '#12804a' : '#f5a742' }]} />
                 <View style={styles.measurementLogCopy}>
                   <Text style={styles.measurementLogLabel}>{todo.label}</Text>
-                  <Text style={styles.measurementLogValue}>{todo.done ? '완료됨' : todo.value}</Text>
+                  <Text style={styles.measurementLogValue}>{todo.done ? 'Completed' : todo.value}</Text>
                 </View>
               </View>
             ))}
@@ -1220,7 +1254,7 @@ function getBodyTone(score: number) {
       aura: '#dff7e8',
       body: '#12804a',
       limb: '#2f9f61',
-      message: '루틴을 거의 다 지켜서 몸 컨디션이 아주 좋습니다.',
+      message: 'You completed almost every routine, so your body status is excellent.',
       skin: '#f4c7a1',
     }
   }
@@ -1230,7 +1264,7 @@ function getBodyTone(score: number) {
       aura: '#edf8d8',
       body: '#2f9f61',
       limb: '#82d39b',
-      message: '좋은 흐름입니다. 남은 루틴을 채우면 아바타가 더 건강해집니다.',
+      message: 'Good momentum. Complete the remaining routines to improve the avatar.',
       skin: '#f4c7a1',
     }
   }
@@ -1240,7 +1274,7 @@ function getBodyTone(score: number) {
       aura: '#fff1d6',
       body: '#f5a742',
       limb: '#f5c26f',
-      message: '관리 중입니다. 빠진 항목을 완료하면 몸 상태가 올라갑니다.',
+      message: 'In progress. Complete missed items to improve your body status.',
       skin: '#f4c7a1',
     }
   }
@@ -1249,7 +1283,7 @@ function getBodyTone(score: number) {
     aura: '#fff1f5',
     body: '#ea6a22',
     limb: '#f5a742',
-    message: '오늘은 루틴이 부족합니다. 한 가지부터 완료해 보세요.',
+    message: 'Routines are light today. Complete one item first.',
     skin: '#f4c7a1',
   }
 }
@@ -1286,12 +1320,12 @@ function ProjectsPage({
       {joinMessage ? (
         <Card>
           <CardContent style={styles.emptyState}>
-            <Text style={styles.itemTitle}>참여 신청 상태를 확인해 주세요.</Text>
+            <Text style={styles.itemTitle}>Check the application status.</Text>
             <Text style={styles.itemMeta}>{joinMessage}</Text>
           </CardContent>
         </Card>
       ) : null}
-      <FilterGroup label="주제">
+      <FilterGroup label="Topic">
         {categoryFilters.map((filter) => (
           <FilterChip
             key={filter.id}
@@ -1331,11 +1365,11 @@ function ProjectSyncStatusCard({
   return (
     <Card>
       <CardContent style={styles.emptyState}>
-        <Text style={styles.itemTitle}>{loadStatus === 'loading' ? '모집 프로젝트를 불러오는 중입니다.' : 'Supabase 연결을 확인해 주세요.'}</Text>
+        <Text style={styles.itemTitle}>{loadStatus === 'loading' ? 'Loading recruiting projects.' : 'Check the Supabase connection.'}</Text>
         <Text style={styles.itemMeta}>
-          {loadStatus === 'loading' ? '기관 대시보드에서 모집중인 연구를 동기화하고 있습니다.' : loadMessage ?? '기존 샘플 프로젝트를 표시합니다.'}
+          {loadStatus === 'loading' ? 'Syncing recruiting studies from the institution dashboard.' : loadMessage ?? 'Showing existing sample studies.'}
         </Text>
-        {loadStatus === 'error' ? <Button icon={RefreshCw} label="다시 불러오기" onPress={onRefresh} size="sm" variant="secondary" /> : null}
+        {loadStatus === 'error' ? <Button icon={RefreshCw} label="Reload" onPress={onRefresh} size="sm" variant="secondary" /> : null}
       </CardContent>
     </Card>
   )
@@ -1368,12 +1402,12 @@ function MyProjectsPage({
         <Card>
           <CardContent style={styles.emptyState}>
             <Text style={styles.itemTitle}>
-              {applicationLoadStatus === 'loading' ? '내 프로젝트를 불러오는 중입니다.' : '내 프로젝트 동기화가 필요합니다.'}
+              {applicationLoadStatus === 'loading' ? 'Loading My Projects.' : 'My Projects needs to sync.'}
             </Text>
             <Text style={styles.itemMeta}>
               {applicationLoadStatus === 'loading'
-                ? 'Supabase에서 신청 및 승인 상태를 확인하고 있습니다.'
-                : applicationLoadMessage ?? '참여 신청 목록을 불러오지 못했습니다.'}
+                ? 'Checking application and approval status in Supabase.'
+                : applicationLoadMessage ?? 'Could not load the application list.'}
             </Text>
           </CardContent>
         </Card>
@@ -1390,25 +1424,25 @@ function MyProjectsPage({
 
 function getCategoryFilters(source: ResearchRequest[]) {
   return [
-    { id: 'all' as const, label: '전체', count: source.length },
+    { id: 'all' as const, label: 'All', count: source.length },
     {
       id: 'insurance' as const,
-      label: '보험 리워드',
+      label: 'Insurance Rewards',
       count: source.filter((request) => request.category === 'insurance').length,
     },
     {
       id: 'coaching' as const,
-      label: '건강 코칭',
+      label: 'Health Coaching',
       count: source.filter((request) => request.category === 'coaching').length,
     },
     {
       id: 'care' as const,
-      label: '병원 모니터링',
+      label: 'Clinical Monitoring',
       count: source.filter((request) => request.category === 'care').length,
     },
     {
       id: 'wellness' as const,
-      label: '기업 웰니스',
+      label: 'Corporate Wellness',
       count: source.filter((request) => request.category === 'wellness').length,
     },
   ]
@@ -1435,11 +1469,11 @@ function getJoinedProjectRecords(userApplications: UserResearchApplication[], re
 function createParticipationRecord(request: ResearchRequest): ParticipationRecord {
   return {
     ...request,
-    accessStatus: '프로젝트 참여 접수',
-    consentDate: '오늘',
-    consentStatus: '참여 신청 완료',
+    accessStatus: 'Project access requested',
+    consentDate: 'Today',
+    consentStatus: 'Applications Done',
     progressValue: 24,
-    rewardStatus: '조건 충족 전',
+    rewardStatus: 'Requirements Pending',
   }
 }
 
@@ -1447,21 +1481,21 @@ function applyApplicationStateToRecord(record: ParticipationRecord, application:
   if (application.status === 'approved') {
     return {
       ...record,
-      accessStatus: application.dataSentBytes > 0 ? '데이터 제출 완료' : 'consent 대기 중',
+      accessStatus: application.dataSentBytes > 0 ? 'Data submitted' : 'Consent pending',
       consentDate: formatApplicationDate(application.lastSubmissionAt),
-      consentStatus: '참여 승인 완료',
+      consentStatus: 'Participation approved',
       progressValue: application.dataSentBytes > 0 ? 64 : 48,
-      rewardStatus: application.dataSentBytes > 0 ? '정산 대기' : '조건 충족 전',
+      rewardStatus: application.dataSentBytes > 0 ? 'Pending Settlement' : 'Requirements Pending',
     }
   }
 
   return {
     ...record,
-    accessStatus: '기관 승인 대기',
-    consentDate: '오늘',
-    consentStatus: '참여 신청 완료',
+    accessStatus: 'Institution approval pending',
+    consentDate: 'Today',
+    consentStatus: 'Applications Done',
     progressValue: 24,
-    rewardStatus: '조건 충족 전',
+    rewardStatus: 'Requirements Pending',
   }
 }
 
@@ -1479,10 +1513,10 @@ function upsertUserApplication(currentApplications: UserResearchApplication[], n
 
 function formatApplicationDate(value: string | null) {
   if (!value) {
-    return '오늘'
+    return 'Today'
   }
 
-  return new Intl.DateTimeFormat('ko-KR', {
+  return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -1490,7 +1524,7 @@ function formatApplicationDate(value: string | null) {
 }
 
 function isApplicationPendingReview(record: ParticipationRecord) {
-  return record.consentStatus === '참여 신청 완료' || record.accessStatus === '기관 승인 대기'
+  return record.consentStatus === 'Applications Done' || record.accessStatus === 'Institution approval pending'
 }
 
 function ConnectedAppsSection() {
@@ -1498,7 +1532,7 @@ function ConnectedAppsSection() {
     <View style={styles.section}>
       <View style={styles.sectionHeaderRow}>
         <View style={styles.sectionHeaderCopy}>
-          <Text style={styles.sectionHeading}>헬스케어 앱 연동</Text>
+          <Text style={styles.sectionHeading}>Healthcare app integrations</Text>
         </View>
       </View>
 
@@ -1514,8 +1548,8 @@ function ConnectedAppsSection() {
 
 function ConnectedAppCard({ app }: { app: ConnectedHealthApp }) {
   const Icon = app.icon
-  const isConnected = app.status === '연동됨'
-  const needsReview = app.status === '확인 필요'
+  const isConnected = app.status === 'Connected'
+  const needsReview = app.status === 'Needs Review'
 
   return (
     <Card style={[styles.connectedAppCard, isConnected ? styles.connectedAppCardActive : null]}>
@@ -1540,7 +1574,7 @@ function ConnectedAppCard({ app }: { app: ConnectedHealthApp }) {
             ))}
           </View>
           <Button
-            label={isConnected ? '관리' : '연동'}
+            label={isConnected ? 'Manage' : 'Connect'}
             onPress={() => undefined}
             size="sm"
             trailingIcon={ChevronRight}
@@ -1585,8 +1619,8 @@ function ResearchList({
       ) : (
         <Card>
           <CardContent style={styles.emptyState}>
-            <Text style={styles.itemTitle}>참여 가능한 프로젝트가 없습니다.</Text>
-            <Text style={styles.itemMeta}>이미 참여한 프로젝트는 내 프로젝트 탭에서 확인할 수 있습니다.</Text>
+            <Text style={styles.itemTitle}>No available studies to join.</Text>
+            <Text style={styles.itemMeta}>Joined studies are available in the My Projects tab.</Text>
           </CardContent>
         </Card>
       )}
@@ -1615,7 +1649,7 @@ function ResearchCard({
 }) {
   return (
     <Pressable
-      accessibilityLabel={`${request.title} 상세보기`}
+      accessibilityLabel={`${request.title} View Details`}
       accessibilityRole="button"
       onPress={onOpen}
       style={({ pressed }) => (pressed ? styles.pressed : null)}
@@ -1625,18 +1659,18 @@ function ResearchCard({
           <View style={styles.serviceCardHeader}>
             <View style={styles.serviceCardCopy}>
               <Text style={styles.itemTitle}>{request.title}</Text>
-              <Text style={styles.serviceOrganization}>목적: {getProjectPurposeSummary(request)}</Text>
-              <Text style={styles.itemMeta}>진행 기관: {request.organization}</Text>
+              <Text style={styles.serviceOrganization}>Purpose: {getProjectPurposeSummary(request)}</Text>
+              <Text style={styles.itemMeta}>Institution: {request.organization}</Text>
             </View>
           </View>
 
           <View style={styles.serviceRewardRow}>
             <View style={styles.serviceRewardCopy}>
-              <Text style={styles.tinyMuted}>보상</Text>
+              <Text style={styles.tinyMuted}>Reward</Text>
               <Text style={styles.rewardText}>{request.reward}</Text>
             </View>
             <View style={styles.detailPill}>
-              <Text style={styles.detailPillText}>상세보기</Text>
+              <Text style={styles.detailPillText}>View Details</Text>
               <ChevronRight color={colors.text} size={15} strokeWidth={2.25} />
             </View>
           </View>
@@ -1668,19 +1702,19 @@ function ResearchDetailModal({
         <View style={styles.modalHeader}>
           <View style={styles.modalTitleGroup}>
             <Text style={styles.modalTitle}>{request.title}</Text>
-            <Text style={styles.itemMeta}>진행 기관: {request.organization}</Text>
+            <Text style={styles.itemMeta}>Institution: {request.organization}</Text>
           </View>
-          <Pressable accessibilityLabel="닫기" accessibilityRole="button" onPress={onClose} style={styles.iconButton}>
+          <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={onClose} style={styles.iconButton}>
             <X color={colors.text} size={20} strokeWidth={2.2} />
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
           <View style={styles.calloutSoft}>
-            <Text style={styles.calloutTitle}>프로젝트 목적</Text>
+            <Text style={styles.calloutTitle}>Study Purpose</Text>
             <Text style={styles.calloutText}>{getProjectPurposeDetail(request)}</Text>
           </View>
 
-          <Text style={styles.sectionHeading}>필요한 데이터</Text>
+          <Text style={styles.sectionHeading}>Required Data</Text>
           <View style={styles.requiredDataList}>
             {requiredData.map((item) => (
               <View key={item.label} style={styles.requiredDataRow}>
@@ -1691,15 +1725,15 @@ function ResearchDetailModal({
           </View>
 
           <View style={styles.infoGrid}>
-            <InfoRow label="활용 방식" value={formatAllowedUse(request.allowedUse)} />
-            <InfoRow label="접근 요청 기한" value={request.expiresAt} />
-            <InfoRow label="보상" value={request.reward} />
-            <InfoRow label="모집 현황" value={request.participants} />
+            <InfoRow label="Allowed Use" value={formatAllowedUse(request.allowedUse)} />
+            <InfoRow label="Access Deadline" value={request.expiresAt} />
+            <InfoRow label="Reward" value={request.reward} />
+            <InfoRow label="Recruitment" value={request.participants} />
           </View>
         </ScrollView>
         <View style={styles.modalFooter}>
-          <Button label="닫기" onPress={onClose} variant="secondary" />
-          <Button disabled={isJoining} label={isJoining ? '신청 중' : '참여하기'} onPress={() => onSelectRequest(request.id)} />
+          <Button label="Close" onPress={onClose} variant="secondary" />
+          <Button disabled={isJoining} label={isJoining ? 'Applying' : 'Join Study'} onPress={() => onSelectRequest(request.id)} />
         </View>
       </SafeAreaView>
     </Modal>
@@ -1707,80 +1741,80 @@ function ResearchDetailModal({
 }
 
 const readableConditionLabels: Record<string, string> = {
-  active_energy: '활동으로 쓴 에너지',
-  blood_glucose: '혈당',
-  blood_pressure: '혈압',
-  distance_walking_running: '걷거나 뛴 거리',
-  exercise_minutes: '운동한 시간',
-  glucose_range: '혈당 범위',
-  heart_rate: '심박수',
-  hrv_sdnn: '심박 변화 정도',
-  insulin_delivery: '인슐린 투여 기록',
-  metabolic_pattern: '대사 변화 패턴',
-  mindful_minutes: '마음챙김 시간',
-  oxygen_saturation: '혈중 산소 수준',
-  respiratory_rate: '호흡수',
-  resting_heart_rate: '쉬고 있을 때 심박수',
-  sleep_analysis: '수면 기록',
-  sleep_consistency: '수면 규칙성',
-  sleep_duration: '총 수면 시간',
-  sleep_stage_band: '깊은 수면과 얕은 수면 같은 수면 단계',
-  stand_time: '일어서 있던 시간',
-  step_count: '걸음 수',
-  vo2_max: '심폐 체력',
-  workout_summary: '운동 기록 요약',
+  active_energy: 'Active energy',
+  blood_glucose: 'Glucose',
+  blood_pressure: 'Blood pressure',
+  distance_walking_running: 'Walking/running distance',
+  exercise_minutes: 'Exercise minutes',
+  glucose_range: 'Glucose range',
+  heart_rate: 'Heart rate',
+  hrv_sdnn: 'Heart rate variability',
+  insulin_delivery: 'Insulin delivery records',
+  metabolic_pattern: 'Metabolic pattern',
+  mindful_minutes: 'Mindfulness minutes',
+  oxygen_saturation: 'Blood oxygen level',
+  respiratory_rate: 'Respiratory rate',
+  resting_heart_rate: 'Resting heart rate',
+  sleep_analysis: 'Sleep record',
+  sleep_consistency: 'Sleep consistency',
+  sleep_duration: 'Total sleep duration',
+  sleep_stage_band: 'Sleep stages such as deep and light sleep',
+  stand_time: 'Stand time',
+  step_count: 'Step count',
+  vo2_max: 'Cardio fitness',
+  workout_summary: 'Workout summary',
 }
 
 const allowedUseLabels: Record<string, string> = {
-  aggregate_research: '여러 사람의 데이터를 합친 연구 분석',
-  personalized_coaching: '개인 맞춤 건강 코칭 개선',
-  remote_monitoring: '원격 건강 모니터링 개선',
-  reward_validation: '리워드 조건 확인',
+  aggregate_research: 'Aggregate cohort research analysis',
+  personalized_coaching: 'Personalized health coaching improvement',
+  remote_monitoring: 'Remote health monitoring improvement',
+  reward_validation: 'Reward eligibility validation',
 }
 
 const projectPurposeSummaries: Record<string, string> = {
-  'REQ-SUI-1029': '활동 기록으로 더 정확한 웨어러블 리워드 기준 개발',
-  'REQ-SUI-1034': '수면·마음챙김 패턴을 활용한 회복 코칭 개선',
-  'REQ-SUI-1041': '심혈관 신호로 회복 변화를 파악하는 모니터링 기능 개발',
-  'REQ-SUI-1058': '혈당·인슐린 흐름을 이해하는 대사 건강 관리 기능 개발',
+  'REQ-SUI-1029': 'Develop more accurate wearable reward criteria from activity records',
+  'REQ-SUI-1034': 'Improve recovery coaching with sleep and mindfulness patterns',
+  'REQ-SUI-1041': 'Develop monitoring features that detect recovery changes from cardiovascular signals',
+  'REQ-SUI-1058': 'Develop metabolic health management features using glucose and insulin patterns',
 }
 
 const projectPurposeDetails: Record<string, string> = {
   'REQ-SUI-1029':
-    '걸음 수, 운동 시간, 활동 에너지, 심폐 체력 같은 기록을 보면 사용자가 실제로 얼마나 꾸준히 움직이는지 더 잘 판단할 수 있습니다. 이 프로젝트는 그 데이터를 활용해 웨어러블 기반 리워드 기준을 더 공정하고 정확하게 만드는 것이 목적입니다.',
+    'Steps, exercise minutes, active energy, and cardio fitness help estimate sustained activity. This study uses that data to make wearable reward criteria fairer and more accurate.',
   'REQ-SUI-1034':
-    '수면 시간, 수면 단계, 마음챙김 시간을 함께 보면 회복 상태가 어떻게 달라지는지 이해할 수 있습니다. 이 데이터는 개인에게 더 잘 맞는 수면 코칭과 웨어러블 회복 기능을 개발하는 데 필요합니다.',
+    'Sleep duration, sleep stages, and mindfulness minutes help explain recovery changes. This data supports more personalized sleep coaching and wearable recovery features.',
   'REQ-SUI-1041':
-    '심박수, 심박 변화, 산소포화도, 혈압, 호흡수는 몸이 회복 중인지 무리하고 있는지 보여주는 기본 신호입니다. 이 프로젝트는 병원 밖에서도 회복 변화를 더 빨리 알아차리는 웨어러블 모니터링 기능을 만드는 것이 목적입니다.',
+    'Heart rate, HRV, oxygen saturation, blood pressure, and respiratory rate show whether the body is recovering or under strain. This study improves wearable monitoring for earlier recovery signals outside the hospital.',
   'REQ-SUI-1058':
-    '혈당과 인슐린 사용 흐름은 식사, 활동, 수면에 따른 대사 변화를 이해하는 데 필요합니다. 이 프로젝트는 원본 수치가 아닌 요약 데이터를 활용해 더 나은 대사 건강 관리 기능을 개발하는 것이 목적입니다.',
+    'Glucose and insulin patterns help explain metabolic changes across meals, activity, and sleep. This study uses summarized data, not raw readings, to improve metabolic health management.',
 }
 
 function getProjectPurposeSummary(request: ResearchRequest) {
-  return projectPurposeSummaries[request.id] ?? `${request.purposeLabel} 기능 개선`
+  return projectPurposeSummaries[request.id] ?? `${request.purposeLabel} feature improvement`
 }
 
 function getProjectPurposeDetail(request: ResearchRequest) {
-  return projectPurposeDetails[request.id] ?? `${request.purposeLabel}에 필요한 건강 데이터 패턴을 이해하고 관련 기능을 개선하기 위한 프로젝트입니다.`
+  return projectPurposeDetails[request.id] ?? `${request.purposeLabel} study uses required health data patterns to improve related product features.`
 }
 
 function getReadableRequiredData(request: ResearchRequest) {
   return [
     {
-      label: '나이대',
+      label: 'Age Range',
       value: request.requiredAgeRanges.map(formatAgeRange).join(', '),
     },
     {
-      label: '건강 기록',
+      label: 'Health Records',
       value: request.requiredConditionTags.map(formatConditionTag).join(', '),
     },
     {
-      label: '지역',
-      value: '시/도 수준의 지역 정보',
+      label: 'Region',
+      value: 'State/province-level region only',
     },
     {
-      label: '기록 기간',
-      value: '월 단위 기간',
+      label: 'Record Period',
+      value: 'month-level period',
     },
   ]
 }
@@ -1789,7 +1823,7 @@ function formatAgeRange(range: string) {
   const startAge = Number(range.split('-')[0])
   if (Number.isNaN(startAge)) return range
 
-  return `${startAge}대`
+  return `${startAge}s`
 }
 
 function formatConditionTag(tag: string) {
@@ -1832,8 +1866,8 @@ function ParticipationList({
       ) : (
         <Card>
           <CardContent style={styles.emptyState}>
-            <Text style={styles.itemTitle}>참여 중인 프로젝트가 없습니다.</Text>
-            <Text style={styles.itemMeta}>프로젝트 탭에서 참여할 항목을 선택하면 이곳에 표시됩니다.</Text>
+            <Text style={styles.itemTitle}>No joined studies yet.</Text>
+            <Text style={styles.itemMeta}>Join a study from the Projects tab to see it here.</Text>
           </CardContent>
         </Card>
       )}
@@ -1857,7 +1891,7 @@ function ParticipationCard({
 
   return (
     <Pressable
-      accessibilityLabel={`${record.title} 상세보기`}
+      accessibilityLabel={`${record.title} View Details`}
       accessibilityRole="button"
       onPress={onOpen}
       style={({ pressed }) => (pressed ? styles.pressed : null)}
@@ -1867,18 +1901,18 @@ function ParticipationCard({
           <View style={styles.serviceCardHeader}>
             <View style={styles.serviceCardCopy}>
               <Text style={styles.itemTitle}>{record.title}</Text>
-              <Text style={styles.serviceOrganization}>목적: {getProjectPurposeSummary(record)}</Text>
-              <Text style={styles.itemMeta}>진행 기관: {record.organization}</Text>
+              <Text style={styles.serviceOrganization}>Purpose: {getProjectPurposeSummary(record)}</Text>
+              <Text style={styles.itemMeta}>Institution: {record.organization}</Text>
             </View>
           </View>
 
           <View style={[styles.serviceRewardRow, isPendingReview ? styles.serviceRewardRowReviewPending : null]}>
             <View style={styles.serviceRewardCopy}>
-              <Text style={styles.tinyMuted}>최근 활동</Text>
-              <Text style={styles.serviceDetailValue}>{latestLog ? `${latestLog.date} · ${latestLog.status}` : '제공 내역 없음'}</Text>
+            <Text style={styles.tinyMuted}>Recent Activity</Text>
+              <Text style={styles.serviceDetailValue}>{latestLog ? `${latestLog.date} · ${latestLog.status}` : 'No sharing history'}</Text>
             </View>
             <View style={styles.detailPill}>
-              <Text style={styles.detailPillText}>상세보기</Text>
+              <Text style={styles.detailPillText}>View Details</Text>
               <ChevronRight color={colors.text} size={15} strokeWidth={2.25} />
             </View>
           </View>
@@ -1931,10 +1965,10 @@ function ParticipationDetailModal({
         ? `Tx ${formatCompactWalletAddress(submissionResult.walrusTxDigest)}`
         : `Blob ${formatCompactWalletAddress(submissionResult.walrusBlobId)}`
       setSubmissionStatus('submitted')
-      setSubmissionMessage(`user-app 가명처리, Privacy Agent 검증, Seal 암호화 후 Walrus 업로드가 완료되었습니다. ${txLabel}`)
+      setSubmissionMessage(`User-app pseudonymization, Privacy Agent verification, Seal encryption, and Walrus upload are complete. ${txLabel}`)
     } catch (error) {
       setSubmissionStatus('error')
-      setSubmissionMessage(error instanceof Error ? error.message : '데이터 제출에 실패했습니다.')
+      setSubmissionMessage(error instanceof Error ? error.message : 'Data submission failed.')
     }
   }
 
@@ -1944,20 +1978,20 @@ function ParticipationDetailModal({
         <View style={styles.modalHeader}>
           <View style={styles.modalTitleGroup}>
             <Text style={styles.modalTitle}>{record.title}</Text>
-            <Text style={styles.itemMeta}>진행 기관: {record.organization}</Text>
+            <Text style={styles.itemMeta}>Institution: {record.organization}</Text>
           </View>
-          <Pressable accessibilityLabel="닫기" accessibilityRole="button" onPress={onClose} style={styles.iconButton}>
+          <Pressable accessibilityLabel="Close" accessibilityRole="button" onPress={onClose} style={styles.iconButton}>
             <X color={colors.text} size={20} strokeWidth={2.2} />
           </Pressable>
         </View>
 
         <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
           <View style={styles.calloutSoft}>
-            <Text style={styles.calloutTitle}>프로젝트 목적</Text>
+            <Text style={styles.calloutTitle}>Study Purpose</Text>
             <Text style={styles.calloutText}>{getProjectPurposeDetail(record)}</Text>
           </View>
 
-          <Text style={styles.sectionHeading}>필요한 데이터</Text>
+          <Text style={styles.sectionHeading}>Required Data</Text>
           <View style={styles.requiredDataList}>
             {requiredData.map((item) => (
               <View key={item.label} style={styles.requiredDataRow}>
@@ -1968,15 +2002,15 @@ function ParticipationDetailModal({
           </View>
 
           <View style={styles.infoGrid}>
-            <InfoRow label="활용 방식" value={formatAllowedUse(record.allowedUse)} />
-            <InfoRow label="접근 요청 기한" value={record.expiresAt} />
-            <InfoRow label="보상" value={record.reward} />
-            <InfoRow label="모집 현황" value={record.participants} />
+            <InfoRow label="Allowed Use" value={formatAllowedUse(record.allowedUse)} />
+            <InfoRow label="Access Deadline" value={record.expiresAt} />
+            <InfoRow label="Reward" value={record.reward} />
+            <InfoRow label="Recruitment" value={record.participants} />
           </View>
 
           <View style={styles.accessLogSection}>
-            <Text style={styles.sectionHeading}>데이터 제공 내역</Text>
-            <Text style={styles.sectionLead}>제공 날짜를 열면 그날 보낸 데이터와 관리 상태를 확인할 수 있습니다.</Text>
+            <Text style={styles.sectionHeading}>Data Sharing History</Text>
+            <Text style={styles.sectionLead}>Open a sharing date to see submitted data and management status.</Text>
             <View style={styles.accessLogList}>
               {provisionLogs.map((entry) => (
                 <DataProvisionLogItem
@@ -1991,7 +2025,7 @@ function ParticipationDetailModal({
               <Button
                 disabled={isPendingReview || submissionStatus === 'submitting'}
                 icon={UploadCloud}
-                label={isPendingReview ? '승인 대기 중' : submissionStatus === 'submitting' ? '제출 중' : '데이터 제출하기'}
+                label={isPendingReview ? 'Waiting for Approval' : submissionStatus === 'submitting' ? 'Submitting' : 'Submit Data'}
                 onPress={() => setIsSubmissionConfirmOpen(true)}
                 size="lg"
               />
@@ -2015,11 +2049,11 @@ function ParticipationDetailModal({
             <View style={styles.confirmModalCard}>
               <View style={styles.confirmModalHeader}>
                 <View style={styles.modalTitleGroup}>
-                  <Text style={styles.confirmModalTitle}>데이터 제출하기</Text>
+                  <Text style={styles.confirmModalTitle}>Submit Data</Text>
                   <Text style={styles.itemMeta}>{record.title}</Text>
                 </View>
                 <Pressable
-                  accessibilityLabel="닫기"
+                  accessibilityLabel="Close"
                   accessibilityRole="button"
                   disabled={isSubmissionLoading}
                   onPress={() => setIsSubmissionConfirmOpen(false)}
@@ -2030,7 +2064,7 @@ function ParticipationDetailModal({
               </View>
 
               <View style={styles.confirmModalBody}>
-                <Text style={styles.sectionLead}>이 연구가 요청한 데이터 항목을 user-app에서 가명처리하고, Privacy Agent 검증과 Seal 암호화를 거친 뒤 Walrus에 제출합니다.</Text>
+                <Text style={styles.sectionLead}>The user app pseudonymizes the requested fields, passes Privacy Agent verification and Seal encryption, then submits the dataset to Walrus.</Text>
                 <View style={styles.requiredDataList}>
                   {requiredData.map((item) => (
                     <View key={item.label} style={styles.requiredDataRow}>
@@ -2047,13 +2081,13 @@ function ParticipationDetailModal({
               <View style={styles.confirmModalFooter}>
                 <Button
                   disabled={isSubmissionLoading}
-                  label="닫기"
+                  label="Close"
                   onPress={() => setIsSubmissionConfirmOpen(false)}
                   variant="secondary"
                 />
                 <Button
                   disabled={isSubmissionLoading}
-                  label="제출하기"
+                  label="Submit"
                   onPress={submitAdditionalData}
                 />
               </View>
@@ -2118,7 +2152,7 @@ function DataProvisionLogItem({
   onToggle: () => void
 }) {
   const statusTone = getProvisionStatusTone(entry.status)
-  const isPendingReview = entry.status === '심사중'
+  const isPendingReview = entry.status === 'Under Review'
 
   return (
     <View style={[styles.accessLogItem, isPendingReview ? styles.accessLogItemReviewPending : null]}>
@@ -2143,7 +2177,7 @@ function DataProvisionLogItem({
       {expanded ? (
         <View style={styles.accessLogPanel}>
           <View style={styles.accessLogDataBlock}>
-            <Text style={styles.tinyMuted}>제공 데이터</Text>
+            <Text style={styles.tinyMuted}>Shared Data</Text>
             <Text style={styles.accessLogData}>{entry.dataLabel}</Text>
           </View>
           <View style={styles.accessEventList}>
@@ -2167,7 +2201,7 @@ function DataProvisionLogItem({
 }
 
 function getProvisionStatusTone(status: string) {
-  if (status === '리워드 지급 완료') {
+  if (status === 'Reward Paid') {
     return {
       backgroundColor: '#e9f7ee',
       borderColor: '#bde7ca',
@@ -2175,7 +2209,7 @@ function getProvisionStatusTone(status: string) {
     }
   }
 
-  if (status === '참가 승인 완료') {
+  if (status === 'Participation Approved') {
     return {
       backgroundColor: colors.successFill,
       borderColor: '#a9d9bd',
@@ -2183,7 +2217,7 @@ function getProvisionStatusTone(status: string) {
     }
   }
 
-  if (status === '검토중' || status === '심사중') {
+  if (status === 'Under Review') {
     return {
       backgroundColor: colors.accent,
       borderColor: '#f5c26f',
@@ -2207,20 +2241,20 @@ function getDataProvisionLogs(record: ParticipationRecord) {
     date: record.consentDate,
     events: [
       {
-        detail: '기관이 참여 신청을 승인했습니다.',
-        label: '승인 완료',
+        detail: 'The institution approved this application.',
+        label: 'Approve Done',
         time: record.consentDate,
         tone: 'success',
       },
     ],
     id: `${record.id}-approved-${record.consentDate}`,
     management: [
-      { label: '신청 상태', value: '기관이 참여 신청을 승인했습니다.' },
-      { label: '데이터 전송', value: '승인 이후 사용자가 직접 제출할 때만 Walrus 업로드가 시작됩니다.' },
-      { label: '다음 단계', value: '데이터 제출하기에서 요청 데이터 항목을 확인하고 제출할 수 있습니다.' },
+      { label: 'Application Status', value: 'The institution approved this application.' },
+      { label: 'Data Transfer', value: 'Walrus upload starts only when the user submits data after approval.' },
+      { label: 'Next Step', value: 'Open Submit Data to review and submit the requested data fields.' },
     ],
-    status: '참가 승인 완료',
-    title: '참가 승인 완료',
+    status: 'Participation Approved',
+    title: 'Participation Approved',
   }
 
   if (isApplicationPendingReview(record)) {
@@ -2230,29 +2264,29 @@ function getDataProvisionLogs(record: ParticipationRecord) {
         date: record.consentDate,
         events: [
           {
-            detail: '참여 신청이 기관 검토 큐에 들어갔습니다.',
-            label: '신청 접수',
+            detail: 'The application entered the institution review queue.',
+            label: 'Applied',
             time: record.consentDate,
           },
           {
-            detail: '승인 전에는 기관이 건강 데이터에 접근할 수 없습니다.',
-            label: '기관 접근',
-            time: '대기',
+            detail: 'Before approval, institutions cannot access raw participant data.',
+            label: 'Institution Access',
+            time: 'Pending',
           },
           {
-            detail: '승인 및 데이터 제출 뒤 보상 조건을 계산합니다.',
-            label: '리워드 수령',
-            time: '대기',
+            detail: 'Reward eligibility is calculated after approval and data submission.',
+            label: 'Reward Receipt',
+            time: 'Pending',
           },
         ],
         id: `${record.id}-application-review`,
         management: [
-          { label: '신청 상태', value: '기관이 참여 신청을 심사하고 있습니다.' },
-          { label: '데이터 전송', value: '승인 전에는 기관이 건강 데이터를 열람할 수 없습니다.' },
-          { label: '다음 단계', value: '승인되면 정책 확인과 로컬 처리 단계를 이어갑니다.' },
+          { label: 'Application Status', value: 'The institution is reviewing this application.' },
+          { label: 'Data Transfer', value: 'The institution cannot access health data before approval.' },
+          { label: 'Next Step', value: 'After approval, policy review and local processing can continue.' },
         ],
-        status: '심사중',
-        title: '참여 신청 심사',
+        status: 'Under Review',
+        title: 'Application Review',
       },
     ]
   }
@@ -2268,88 +2302,88 @@ function getDataProvisionLogs(record: ParticipationRecord) {
       date: '2026.06.06',
       events: [
         {
-          detail: '사용자 승인 후 Walrus에 초기 요약 데이터를 업로드했습니다.',
-          label: '보낸 시각',
+          detail: 'Initial summary data was uploaded to Walrus after user approval.',
+          label: 'Sent At',
           time: '2026.06.06 09:12',
         },
         {
-          detail: `${record.organization}에서 연구 조건 확인을 위해 접근했습니다.`,
-          label: '기관 접근',
+          detail: `${record.organization} accessed this study to verify conditions.`,
+          label: 'Institution Access',
           time: '2026.06.06 10:04',
         },
         {
-          detail: `${record.reward} 보상 지급이 완료되었습니다.`,
-          label: '리워드 수령',
+          detail: `${record.reward} reward has been paid.`,
+          label: 'Reward Receipt',
           time: '2026.06.06 18:20',
           tone: 'success',
         },
       ],
       id: `${record.id}-20260606`,
       management: [
-        { label: '동의 기록', value: '사용자 동의와 접근 요청 조건이 Sui 이벤트로 남았습니다.' },
-        { label: '저장 방식', value: '원본 센서값은 보관하지 않고 연구용 범주 데이터만 연결했습니다.' },
-        { label: '리워드', value: `${record.reward} 보상 지급이 완료되었습니다.` },
+        { label: 'Consent Record', value: 'User consent and access request terms were recorded as Sui events.' },
+        { label: 'Storage Method', value: 'Raw sensor values were not stored; only research-grade categorical data was linked.' },
+        { label: 'Reward', value: `${record.reward} reward has been paid.` },
       ],
-      status: '리워드 지급 완료',
-      title: '초기 데이터 제공',
+      status: 'Reward Paid',
+      title: 'Initial Data Sharing',
     },
     {
       dataLabel: primaryData,
       date: '2026.06.07',
       events: [
         {
-          detail: '프로젝트 목적에 맞춘 요약 데이터만 제출했습니다.',
-          label: '보낸 시각',
+          detail: 'Only purpose-matched summary data was submitted.',
+          label: 'Sent At',
           time: '2026.06.07 08:46',
         },
         {
-          detail: `${record.organization}에서 요약 데이터와 접근 로그를 확인했습니다.`,
-          label: '기관 접근',
+          detail: `${record.organization} reviewed summary data and access logs.`,
+          label: 'Institution Access',
           time: '2026.06.07 11:18',
         },
         {
-          detail: '접근 기록 확인 뒤 보상 정산에 반영됩니다.',
-          label: '리워드 수령',
-          time: '대기',
+          detail: 'Reward settlement reflects the verified access record.',
+          label: 'Reward Receipt',
+          time: 'Pending',
         },
       ],
       id: `${record.id}-20260607`,
       management: [
-        { label: '정책 확인', value: '프로젝트 목적에 필요한 항목만 남기고 상세 식별 정보는 제외했습니다.' },
-        { label: '기관 접근', value: '요청 기관은 요약 데이터와 접근 로그만 확인할 수 있습니다.' },
-        { label: '보상 처리', value: '접근 기록이 확인되면 보상 조건에 반영됩니다.' },
+        { label: 'Policy Check', value: 'Only fields required for the study purpose remain; detailed identifiers were removed.' },
+        { label: 'Institution Access', value: 'The requesting institution can view only summary data and access logs.' },
+        { label: 'Reward Processing', value: 'Verified access logs are applied to reward eligibility.' },
       ],
-      status: '제출 완료',
-      title: `${formatAllowedUse(record.allowedUse)}용 요약 제공`,
+      status: 'Submission complete',
+      title: `${formatAllowedUse(record.allowedUse)} Summary Sharing`,
     },
     {
       dataLabel: fullData,
       date: '2026.06.08',
       events: [
         {
-          detail: '일일 건강 기록 업데이트를 Walrus에 제출했습니다.',
-          label: '보낸 시각',
+          detail: 'Daily health record update was submitted to Walrus.',
+          label: 'Sent At',
           time: '2026.06.08 09:28',
         },
         {
-          detail: '기관 접근 전 정책 확인 단계입니다.',
-          label: '기관 접근',
-          time: '대기',
+          detail: 'Policy review is in progress before institution access.',
+          label: 'Institution Access',
+          time: 'Pending',
         },
         {
-          detail: '기관 접근과 검토가 끝나면 리워드 처리 여부가 결정됩니다.',
-          label: '리워드 수령',
-          time: '대기',
+          detail: 'Reward processing is determined after institution access and review.',
+          label: 'Reward Receipt',
+          time: 'Pending',
         },
       ],
       id: `${record.id}-20260608`,
       management: [
-        { label: '정책 확인', value: '금지 데이터와 정밀 시간 정보가 제외됐는지 확인했습니다.' },
-        { label: '제출 상태', value: '검토가 끝나면 제출 완료 상태로 전환됩니다.' },
-        { label: '접근 권한', value: '검토 중에는 요청 기관이 데이터를 열람할 수 없습니다.' },
+        { label: 'Policy Check', value: 'Forbidden data and precise time fields were excluded.' },
+        { label: 'Submission status', value: 'The record changes to submitted after review is complete.' },
+        { label: 'Access Rights', value: 'The requesting institution cannot view data while review is pending.' },
       ],
-      status: '검토중',
-      title: '일일 건강 기록 업데이트',
+      status: 'Under Review',
+      title: 'Daily Health Record Update',
     },
   ]
 }
@@ -2399,23 +2433,23 @@ function FilterChip({
 
 function AgentManagement() {
   const memoryItems = [
-    { label: '기관 요청 기준', value: '보험 리워드, 건강 코칭' },
-    { label: '반복 안전화 규칙', value: '상세 위치와 정밀 시간 제외' },
-    { label: '최근 policy memory', value: 'mvp-health-v1' },
+    { label: 'Institution Request Criteria', value: 'Insurance Rewards, Health Coaching' },
+    { label: 'Reusable Safety Rules', value: 'Exclude detailed location and precise time' },
+    { label: 'Latest policy memory', value: 'mvp-health-v1' },
   ]
 
   return (
     <View style={styles.detailGrid}>
       <Card>
         <CardHeader>
-          <CardTitle>Agent 상태</CardTitle>
-          <CardDescription>내 헬스케어 마이데이터를 보내기 전에 기관 요청 정책과 개인정보 위험을 검토합니다.</CardDescription>
+          <CardTitle>Agent Status</CardTitle>
+          <CardDescription>Reviews institution policy and privacy risk before sending healthcare MyData.</CardDescription>
         </CardHeader>
         <CardContent>
           <View style={styles.statGrid}>
-            <AgentStat icon={BrainCircuit} label="Agent v0.1.0" value="검증 대기 없음" />
-            <AgentStat icon={CheckCircle2} label="정책 통과" value="금지 필드 미탐지" />
-            <AgentStat icon={LockKeyhole} label="권한 범위" value="사용자 승인 필요" />
+            <AgentStat icon={BrainCircuit} label="Agent v0.1.0" value="No pending verification" />
+            <AgentStat icon={CheckCircle2} label="Policy Passed" value="No forbidden fields detected" />
+            <AgentStat icon={LockKeyhole} label="Permission Scope" value="Requires user approval" />
           </View>
 
           <Separator />
@@ -2423,7 +2457,7 @@ function AgentManagement() {
           <View>
             <Text style={styles.sectionHeading}>Agent memory</Text>
             <Text style={styles.sectionLead}>
-              정책과 이전 위험 패턴은 기억하지만, 사용자 승인 없이 동의나 복호화 권한을 만들지 않습니다.
+              It remembers policy and prior risk patterns, but never creates consent or decryption rights without user approval.
             </Text>
             <View style={styles.memoryList}>
               {memoryItems.map((item) => (
@@ -2439,8 +2473,8 @@ function AgentManagement() {
 
       <Card>
         <CardHeader>
-          <CardTitle>검증 체크</CardTitle>
-          <CardDescription>기업 요청에 맞게 안전화됐는지 업로드 전에 확인합니다</CardDescription>
+          <CardTitle>Verification Checks</CardTitle>
+          <CardDescription>Checks whether data was made safe for the company request before upload</CardDescription>
         </CardHeader>
         <CardContent>
           {agentChecks.map((check) => (
@@ -2454,13 +2488,13 @@ function AgentManagement() {
 
       <Card style={styles.agentLimitCard}>
         <CardHeader>
-          <CardTitle>Agent 제한</CardTitle>
-          <CardDescription style={styles.agentLimitDescription}>사용자 보호 원칙</CardDescription>
+          <CardTitle>Agent Limits</CardTitle>
+          <CardDescription style={styles.agentLimitDescription}>User Protection Principles</CardDescription>
         </CardHeader>
         <CardContent>
-          <Text style={styles.limitText}>원본 PHI를 플랫폼 서버로 보내지 않습니다.</Text>
-          <Text style={styles.limitText}>사용자 승인 없이 동의를 생성하지 않습니다.</Text>
-          <Text style={styles.limitText}>금지 필드가 남아 있으면 업로드를 승인하지 않습니다.</Text>
+          <Text style={styles.limitText}>Never sends raw PHI to the platform server.</Text>
+          <Text style={styles.limitText}>Never creates consent without user approval.</Text>
+          <Text style={styles.limitText}>Blocks uploads while forbidden fields remain.</Text>
         </CardContent>
       </Card>
     </View>
@@ -2976,6 +3010,46 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     lineHeight: 24,
+  },
+  webHealthNoticeActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    justifyContent: 'flex-end',
+  },
+  webHealthNoticeBackdrop: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(18, 29, 24, 0.42)',
+    flex: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  webHealthNoticeCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    gap: 14,
+    maxWidth: 430,
+    padding: 20,
+    width: '100%',
+  },
+  webHealthNoticeIcon: {
+    alignItems: 'center',
+    backgroundColor: '#eef7f2',
+    borderRadius: 22,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  webHealthNoticeText: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  webHealthNoticeTitle: {
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: '800',
+    lineHeight: 26,
   },
   loadingStepDot: {
     alignItems: 'center',

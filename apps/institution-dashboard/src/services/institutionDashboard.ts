@@ -230,35 +230,35 @@ type InstitutionWalletProfileRow = {
 const demoInstitutionStorageKey = 'modi_institution_login_id'
 
 const dataFieldByScope: Record<string, { field_key: string; source: string; policy: string; is_enabled: boolean }> = {
-  'VO2 max': { field_key: 'vo2_max', source: 'apple_health', policy: '정확 수치 제거 후 band만 허용', is_enabled: true },
-  '걸음': { field_key: 'step_count', source: 'apple_health', policy: '일별 원본값 제거 후 월 단위 구간화', is_enabled: true },
-  '수면 단계': { field_key: 'sleep_stage', source: 'wearable', policy: '단계별 비율만 허용하고 세션 원본 제거', is_enabled: true },
-  '수면 시간': { field_key: 'sleep_duration', source: 'wearable', policy: '분 단위 원본값 제거 후 구간화', is_enabled: true },
-  '수면 효율': { field_key: 'sleep_efficiency', source: 'wearable', policy: '정확 비율 제거 후 band만 허용', is_enabled: true },
-  '심박수': { field_key: 'heart_rate', source: 'wearable', policy: '정확 bpm 제거 후 구간화', is_enabled: true },
-  '안정시 심박수': { field_key: 'resting_heart_rate', source: 'wearable', policy: '정확 bpm 제거 후 band만 허용', is_enabled: true },
-  '체중': { field_key: 'weight_band', source: 'health_profile', policy: '정확 체중 제거 후 구간화', is_enabled: true },
-  '혈중 산소': { field_key: 'oxygen_saturation', source: 'wearable', policy: '정확 SpO2 제거 후 band만 허용', is_enabled: true },
-  'HRV': { field_key: 'hrv_band', source: 'wearable', policy: '정확 수치 제거 후 회복 band만 허용', is_enabled: true },
-  '기기 유형': { field_key: 'device_type', source: 'device', policy: '상세 모델명 제거 후 기기 범주만 허용', is_enabled: true },
-  '기록 월': { field_key: 'recorded_month', source: 'system', policy: '일 단위 날짜 제거 후 월 단위만 허용', is_enabled: true },
-  '운동 시간': { field_key: 'exercise_minutes', source: 'apple_health', policy: '분 단위 원본값 제거 후 구간화', is_enabled: true },
-  '활동 에너지': { field_key: 'active_energy', source: 'apple_health', policy: '정확 kcal 제거 후 band만 허용', is_enabled: true },
+  'VO2 max': { field_key: 'vo2_max', source: 'apple_health', policy: 'Remove exact values; allow bands only', is_enabled: true },
+  'Steps': { field_key: 'step_count', source: 'apple_health', policy: 'Remove daily raw values; aggregate into monthly bands', is_enabled: true },
+  'Sleep stages': { field_key: 'sleep_stage', source: 'wearable', policy: 'Allow stage ratios only and remove raw sessions', is_enabled: true },
+  'Sleep duration': { field_key: 'sleep_duration', source: 'wearable', policy: 'Remove minute-level raw values; convert to bands', is_enabled: true },
+  'Sleep efficiency': { field_key: 'sleep_efficiency', source: 'wearable', policy: 'Remove exact ratios; allow bands only', is_enabled: true },
+  'Heart rate': { field_key: 'heart_rate', source: 'wearable', policy: 'Remove exact BPM; convert to bands', is_enabled: true },
+  'Resting heart rate': { field_key: 'resting_heart_rate', source: 'wearable', policy: 'Remove exact BPM; allow bands only', is_enabled: true },
+  'Weight': { field_key: 'weight_band', source: 'health_profile', policy: 'Remove exact weight; convert to bands', is_enabled: true },
+  'Blood oxygen': { field_key: 'oxygen_saturation', source: 'wearable', policy: 'Remove exact SpO2; allow bands only', is_enabled: true },
+  'HRV': { field_key: 'hrv_band', source: 'wearable', policy: 'Remove exact values; allow recovery bands only', is_enabled: true },
+  'Device type': { field_key: 'device_type', source: 'device', policy: 'Remove detailed model names; allow device category only', is_enabled: true },
+  'Recorded month': { field_key: 'recorded_month', source: 'system', policy: 'Remove day-level dates; allow month-level time only', is_enabled: true },
+  'Exercise minutes': { field_key: 'exercise_minutes', source: 'apple_health', policy: 'Remove minute-level raw values; convert to bands', is_enabled: true },
+  'Active energy': { field_key: 'active_energy', source: 'apple_health', policy: 'Remove exact kcal; allow bands only', is_enabled: true },
 }
 
 const statusLabels: Record<ProjectStatus, string> = {
-  draft: '초안',
-  reviewing: '심사중',
-  recruiting: '모집중',
-  closed: '종료',
+  draft: 'Draft',
+  reviewing: 'Under Review',
+  recruiting: 'Recruiting',
+  closed: 'Closed',
 }
 
 const verificationLabels: Record<string, string> = {
-  verified: '검증 완료',
-  policy_passed: '정책 통과',
-  needs_review: '확인 필요',
-  pending_review: '검증 대기',
-  insufficient: '제출 부족',
+  verified: 'Verified',
+  policy_passed: 'Policy Passed',
+  needs_review: 'Needs Review',
+  pending_review: 'Pending Verification',
+  insufficient: 'Insufficient Data',
 }
 
 const projectSelectColumns = [
@@ -606,7 +606,7 @@ export async function resolveSlushInstitution(walletAddress: string): Promise<Sl
   const normalizedWalletAddress = normalizeSuiAddress(walletAddress)
 
   if (!normalizedWalletAddress) {
-    throw new Error('유효한 Slush 지갑 주소가 필요합니다.')
+    throw new Error('A valid Slush wallet address is required.')
   }
 
   try {
@@ -624,7 +624,7 @@ export async function registerSlushInstitution(input: {
   const normalizedWalletAddress = normalizeSuiAddress(input.walletAddress)
 
   if (!normalizedWalletAddress) {
-    throw new Error('유효한 Slush 지갑 주소가 필요합니다.')
+    throw new Error('A valid Slush wallet address is required.')
   }
 
   let profile: SlushInstitutionProfile | null
@@ -665,7 +665,7 @@ export async function createResearchProject(input: CreateResearchProjectInput): 
   })
 
   if (researcherSuiAddress && !institutionSlug) {
-    throw new Error('기관 등록이 필요합니다. Slush 지갑에 연결할 기관명을 먼저 등록해 주세요.')
+    throw new Error('Institution registration is required. Register an institution name for the connected Slush wallet first.')
   }
 
   if (institutionSlug) {
@@ -693,7 +693,7 @@ export async function createResearchProject(input: CreateResearchProjectInput): 
   const institutionId = await getPrimaryInstitutionId()
 
   if (!institutionId) {
-    throw new Error('기관 멤버십을 찾을 수 없습니다. institution_members에 현재 Auth 사용자를 연결해 주세요.')
+    throw new Error('Institution membership was not found. Connect the current Auth user in institution_members.')
   }
 
   const targetParticipants = Math.max(1, Math.trunc(input.targetParticipants || 1))
@@ -705,7 +705,7 @@ export async function createResearchProject(input: CreateResearchProjectInput): 
       ...input,
       researcherSuiAddress,
       accessPeriodDays: Math.max(1, Math.trunc(input.accessPeriodDays || 1)),
-      dataScope: input.dataScope.length > 0 ? input.dataScope : ['웨어러블 데이터'],
+      dataScope: input.dataScope.length > 0 ? input.dataScope : ['Wearable data'],
       rewardAmountPerParticipant: rewardAmount,
       rewardCurrency: input.rewardCurrency.trim() || 'USDC',
       targetParticipants,
@@ -728,7 +728,7 @@ export async function createResearchProject(input: CreateResearchProjectInput): 
       reward_pool_total: rewardPoolTotal,
       reward_pool_remaining: rewardPoolTotal,
       access_period_days: Math.max(1, Math.trunc(input.accessPeriodDays || 1)),
-      data_scope: input.dataScope.length > 0 ? input.dataScope : ['웨어러블 데이터'],
+      data_scope: input.dataScope.length > 0 ? input.dataScope : ['Wearable data'],
       policy_pack_blob_id: policyPackUpload.blobId,
       policy_pack_object_id: policyPackUpload.blobObjectId,
       policy_pack_hash: policyPackUpload.hash,
@@ -864,7 +864,7 @@ function mapProject(row: ProjectRow): DashboardProject {
     status,
     statusLabel: statusLabels[status],
     targetParticipants,
-    targetLabel: `${targetParticipants.toLocaleString('ko-KR')}명`,
+    targetLabel: `${targetParticipants.toLocaleString('en-US')} people`,
     rewardCurrency,
     rewardAmountPerParticipant: Number(row.reward_amount_per_participant ?? 0),
     rewardPoolTotal,
@@ -895,7 +895,7 @@ function mapApplication(row: ApplicationRow): DashboardApplicant {
     id: row.id,
     projectId: row.project_id,
     applicantCode: row.applicant_code ?? row.id.slice(0, 8).toUpperCase(),
-    applicant: row.applicant_label ?? '익명 참여자',
+    applicant: row.applicant_label ?? 'Anonymous participant',
     score: Number(row.match_score ?? 0),
     dataSentBytes: Number(row.data_sent_bytes ?? 0),
     dataSent: formatBytes(Number(row.data_sent_bytes ?? 0)),
@@ -914,7 +914,7 @@ function mapSettlement(row: SettlementRow, application?: DashboardApplicant): Da
     projectId: row.project_id,
     applicationId: row.application_id,
     applicantCode: application?.applicantCode ?? row.application_id.slice(0, 8).toUpperCase(),
-    applicant: application?.applicant ?? '익명 참여자',
+    applicant: application?.applicant ?? 'Anonymous participant',
     amount,
     currency,
     amountLabel: `${formatNumber(amount)} ${currency}`,
@@ -941,10 +941,10 @@ function groupSubmissions(rows: SubmissionRow[]) {
       agentMemoryManifestBlobId: agentMemory.manifestBlobId,
       agentMemoryManifestHash: agentMemory.manifestHash,
       date: formatDate(row.submitted_at),
-      category: row.category ?? '데이터 제출',
+      category: row.category ?? 'Data submission',
       period: formatPeriod(row.period_start, row.period_end),
       volume: formatBytes(Number(row.volume_bytes ?? 0)),
-      status: verificationLabels[row.validation_status ?? 'pending_review'] ?? '검증 대기',
+      status: verificationLabels[row.validation_status ?? 'pending_review'] ?? 'Pending Verification',
       walrusBlobId: row.walrus_blob_id,
       walrusDatasetObjectId: row.walrus_dataset_object_id,
       walrusManifestHash: row.walrus_manifest_hash,
@@ -1022,7 +1022,7 @@ function buildProjectDataFields(dataScope: string[]) {
   const fields = dataScope.map((scope) => dataFieldByScope[scope] ?? {
     field_key: normalizeFieldKey(scope),
     source: 'user_health_data',
-    policy: '직접 식별자와 정확한 원본값 제거',
+    policy: 'Remove direct identifiers and exact raw values',
     is_enabled: true,
   })
 
@@ -1030,14 +1030,14 @@ function buildProjectDataFields(dataScope: string[]) {
     {
       field_key: 'health_record',
       source: 'user_health_data',
-      policy: '직접 식별자와 정확한 원본값 제거',
+      policy: 'Remove direct identifiers and exact raw values',
       is_enabled: true,
     },
   ]
 }
 
 function normalizeFieldKey(value: string) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9가-힣]+/g, '_').replace(/^_+|_+$/g, '')
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
 }
 
 function getStoredDemoInstitutionSlug() {
@@ -1057,7 +1057,7 @@ async function invokeSlushInstitutionFunction(input: {
   const walletAddress = normalizeSuiAddress(input.walletAddress)
 
   if (!walletAddress) {
-    throw new Error('유효한 Slush 지갑 주소가 필요합니다.')
+    throw new Error('A valid Slush wallet address is required.')
   }
 
   const { data, error } = await supabase.functions.invoke('register-slush-institution', {
@@ -1088,7 +1088,7 @@ async function invokeSlushInstitutionFunction(input: {
     typeof institution.institutionSlug !== 'string' ||
     typeof institution.walletAddress !== 'string'
   ) {
-    throw new Error('기관 등록 응답 형식이 올바르지 않습니다.')
+    throw new Error('Institution registration response has an invalid format.')
   }
 
   return {
@@ -1138,7 +1138,7 @@ async function registerDirectSlushInstitution(input: {
   const institutionName = input.institutionName.trim()
 
   if (!institutionName) {
-    throw new Error('기관명을 입력해 주세요.')
+    throw new Error('Enter an institution name.')
   }
 
   const institutionId = crypto.randomUUID()
@@ -1185,7 +1185,7 @@ function slugifyInstitutionName(value: string) {
   return value
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9가-힣]+/g, '-')
+    .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 48)
 }
@@ -1215,7 +1215,7 @@ function normalizeSettlementStatus(status: string): SettlementStatus {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat('ko-KR', {
+  return new Intl.DateTimeFormat('en-US', {
     month: 'numeric',
     day: 'numeric',
     hour: 'numeric',
@@ -1225,7 +1225,7 @@ function formatDate(value: string) {
 
 function formatPeriod(start: string | null, end: string | null) {
   if (!start && !end) {
-    return '기간 미지정'
+    return 'No period'
   }
 
   if (start && end) {
@@ -1237,10 +1237,10 @@ function formatPeriod(start: string | null, end: string | null) {
 
 function formatDateOnly(value: string) {
   if (!value) {
-    return '기간 미지정'
+    return 'No period'
   }
 
-  return new Intl.DateTimeFormat('ko-KR', {
+  return new Intl.DateTimeFormat('en-US', {
     month: 'numeric',
     day: 'numeric',
   }).format(new Date(value))
@@ -1248,22 +1248,22 @@ function formatDateOnly(value: string) {
 
 function formatRelativeDate(value: string | null) {
   if (!value) {
-    return '제출 없음'
+    return 'No submissions'
   }
 
   const diffMs = Date.now() - new Date(value).getTime()
   const minutes = Math.max(1, Math.floor(diffMs / 60_000))
 
   if (minutes < 60) {
-    return `${minutes}분 전`
+    return `${minutes} minutes ago`
   }
 
   const hours = Math.floor(minutes / 60)
   if (hours < 24) {
-    return `${hours}시간 전`
+    return `${hours} hours ago`
   }
 
-  return `${Math.floor(hours / 24)}일 전`
+  return `${Math.floor(hours / 24)} days ago`
 }
 
 function formatBytes(bytes: number) {
@@ -1280,11 +1280,11 @@ function formatBytes(bytes: number) {
     unitIndex += 1
   }
 
-  return `${value.toLocaleString('ko-KR', { maximumFractionDigits: value >= 10 ? 0 : 1 })} ${units[unitIndex]}`
+  return `${value.toLocaleString('en-US', { maximumFractionDigits: value >= 10 ? 0 : 1 })} ${units[unitIndex]}`
 }
 
 function formatNumber(value: number) {
-  return value.toLocaleString('ko-KR', { maximumFractionDigits: value >= 10 ? 0 : 2 })
+  return value.toLocaleString('en-US', { maximumFractionDigits: value >= 10 ? 0 : 2 })
 }
 
 function normalizeSuiAddress(value: string | null | undefined) {

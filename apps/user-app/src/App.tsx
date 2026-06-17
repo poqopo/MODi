@@ -86,7 +86,7 @@ export default App
 function StartupLoadingPage() {
   return (
     <SafeAreaView style={loginStyles.screen}>
-      <Text style={loginStyles.configMessage}>로그인 정보를 확인하는 중입니다.</Text>
+      <Text style={loginStyles.configMessage}>Checking login session.</Text>
     </SafeAreaView>
   )
 }
@@ -105,7 +105,7 @@ function UserLoginPage({ onBack, onLogin }: { onBack: () => void; onLogin: (logi
     try {
       continueWithDemoLogin()
     } catch {
-      setMessage(`등록된 사용자 ID가 아닙니다. 예시 ID: ${userExampleIds.join(', ')}`)
+      setMessage(`This user ID is not registered. Example IDs: ${userExampleIds.join(', ')}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -138,25 +138,25 @@ function UserLoginPage({ onBack, onLogin }: { onBack: () => void; onLogin: (logi
           <Text style={loginStyles.eyebrow}>MODi User App</Text>
           <Text style={loginStyles.title}>Google zkLogin</Text>
           <Text style={loginStyles.description}>
-            Google ID token으로 Sui 주소를 만들고, 그 주소를 앱의 참여자 ID로 사용합니다.
+            Create a Sui address from a Google ID token and use it as the participant ID.
           </Text>
         </View>
 
         <View style={loginStyles.zkLoginGroup}>
           <Button
             disabled={isSubmitting || isZkLoginSubmitting}
-            label={isZkLoginSubmitting ? '확인 중' : zkLoginConfig.isConfigured ? 'Google로 zkLogin' : '바로 시작하기'}
+            label={isZkLoginSubmitting ? 'Checking' : zkLoginConfig.isConfigured ? 'Google zkLogin' : 'Start now'}
             onPress={handleZkLogin}
             size="lg"
           />
           {!zkLoginConfig.isConfigured ? (
-            <Text style={loginStyles.configMessage}>zkLogin 설정이 없으면 데모 ID로 바로 진행합니다.</Text>
+            <Text style={loginStyles.configMessage}>If zkLogin is not configured, the app continues with a demo ID.</Text>
           ) : null}
         </View>
 
         <View style={loginStyles.formGroup}>
-          <Text style={loginStyles.sectionTitle}>데모 ID로 계속하기</Text>
-          <Text style={loginStyles.label}>사용자 ID</Text>
+          <Text style={loginStyles.sectionTitle}>Continue with a demo ID</Text>
+          <Text style={loginStyles.label}>User ID</Text>
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
@@ -183,10 +183,10 @@ function UserLoginPage({ onBack, onLogin }: { onBack: () => void; onLogin: (logi
         {message ? <Text style={loginStyles.message}>{message}</Text> : null}
 
         <View style={loginStyles.actions}>
-          <Button label="뒤로" onPress={onBack} variant="secondary" />
+          <Button label="Back" onPress={onBack} variant="secondary" />
           <Button
             disabled={isSubmitting || isZkLoginSubmitting}
-            label={isSubmitting ? '확인 중' : '데모 로그인'}
+            label={isSubmitting ? 'Checking' : 'Demo Login'}
             onPress={handleLogin}
           />
         </View>

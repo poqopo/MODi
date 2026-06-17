@@ -1,198 +1,130 @@
 import {
-  Activity,
   ArrowRight,
+  BookOpen,
+  DatabaseZap,
   LockKeyhole,
-  Plus,
-  Search,
-  Settings,
   ShieldCheck,
+  Users,
   type LucideIcon,
 } from 'lucide-react'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
-import { applicants, capabilities, metrics, pipelineEvents, studies, trustSignals } from '@/data/landing'
 
 type LandingPageProps = {
   onCreateResearch: () => void
+  onViewDocs: () => void
 }
 
-export function LandingPage({ onCreateResearch }: LandingPageProps) {
+export function LandingPage({ onCreateResearch, onViewDocs }: LandingPageProps) {
   return (
     <>
-      <HeroSection onCreateResearch={onCreateResearch} />
-      <CapabilitiesSection />
-      <WorkflowSection />
+      <HeroSection onCreateResearch={onCreateResearch} onViewDocs={onViewDocs} />
+      <DirectParticipantAccessSection />
+      <PrivacySafeIntakeSection />
+      <ReadyDatasetsSection />
       <Footer />
     </>
   )
 }
 
-function HeroSection({ onCreateResearch }: LandingPageProps) {
+function HeroSection({ onCreateResearch, onViewDocs }: LandingPageProps) {
   return (
     <section id="top" className="relative overflow-hidden bg-canvas-soft">
       <div className="mesh-band absolute inset-x-0 top-0 h-[58%]" aria-hidden="true" />
       <div className="container relative py-10 sm:py-12 lg:py-14">
-        <div className="mx-auto max-w-3xl text-center">
-          <Badge variant="secondary">헬스케어 마이데이터 Privacy Agent</Badge>
-          <h1 className="mt-6 text-4xl font-light leading-tight text-ink sm:text-5xl lg:text-[56px]">
-            기업별 요청에 맞춰 건강 데이터를 안전하게 받을 수 있게 합니다
+        <div className="mx-auto max-w-6xl text-center">
+          <h1 className="mx-auto text-center text-4xl font-bold leading-tight text-ink sm:text-5xl lg:text-[40px]">
+            Health data people can actually share.
           </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-base font-light leading-7 text-ink-secondary sm:text-lg">
-            MODi는 기관의 데이터 요청사항을 Walrus policy memory로 만들고, 사용자가 보내는 헬스케어
-            마이데이터가 로컬 가명처리와 Privacy Agent 검증을 거쳐 전달되도록 돕습니다.
+          <p className="mx-auto mt-5 max-w-3xl text-base font-light leading-7 text-ink-secondary sm:text-lg">
+            <span className="block">Participants pick the records.</span>
+            <strong className="block font-semibold text-ink">MODi turns them into verified, privacy-ready datasets for your company.</strong>
           </p>
           <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Button size="lg" onClick={onCreateResearch}>
-              새 연구 만들기
+              Start Collecting Data
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-            <Button variant="secondary" size="lg" onClick={onCreateResearch}>
-              운영 데모 보기
+            <Button variant="secondary" size="lg" onClick={onViewDocs}>
+              <BookOpen className="mr-2 h-4 w-4" />
+              View More
             </Button>
           </div>
         </div>
 
-        <DashboardPreview />
+        <DataFlowIllustration />
       </div>
     </section>
   )
 }
 
-function DashboardPreview() {
+function DataFlowIllustration() {
   return (
-    <div className="mt-10 overflow-hidden rounded-lg bg-[#0d253d] p-3 text-white shadow-dashboard sm:p-4 lg:mt-12">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-2 pb-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-md bg-white/10">
-            <Activity className="h-4 w-4 text-white" />
-          </div>
-          <div>
-            <p className="text-sm font-medium">Research Operations</p>
-            <p className="text-xs text-white/60">기관용 데이터 연구 관리</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <PreviewIconButton label="검색" icon={Search} />
-          <PreviewIconButton label="설정" icon={Settings} />
-        </div>
-      </div>
-
-      <div className="grid min-w-0 gap-4 pt-4 lg:grid-cols-[232px_minmax(0,1fr)]">
-        <aside className="min-w-0 rounded-lg border border-white/10 bg-white/[0.06] p-4">
-          <Badge variant="dark">모집 현황</Badge>
-          <div className="mt-5 space-y-4">
-            {metrics.map((metric) => (
-              <div key={metric.label}>
-                <p className="text-xs text-white/55">{metric.label}</p>
-                <p className="tabular mt-1 text-2xl font-light leading-none text-white">{metric.value}</p>
-                <p className="mt-1 text-xs text-white/55">{metric.detail}</p>
-              </div>
-            ))}
-          </div>
-        </aside>
-
-        <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
-          <div className="min-w-0 rounded-lg border border-white/10 bg-white p-4 text-ink">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium">진행 중인 연구</p>
-                <p className="text-xs text-ink-mute">참여 신청, 승인, 데이터 범위를 함께 확인</p>
-              </div>
-              <Button variant="outline" size="sm">
-                <Plus className="mr-2 h-3.5 w-3.5" />
-                연구 추가
-              </Button>
-            </div>
-            <ResearchTable />
-          </div>
-
-          <div className="min-w-0 space-y-4">
-            <ApplicantQueue />
-            <DataPolicyPanel />
-          </div>
-        </div>
+    <div className="mx-auto mt-10 max-w-5xl rounded-lg border border-border bg-white p-5 shadow-dashboard lg:mt-12">
+      <div className="grid gap-4 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-stretch">
+        <FlowNode
+          icon={Users}
+          title="Participant"
+          detail="Picks what to share"
+          items={['Wearables', 'Medical records', 'Wellness logs']}
+        />
+        <FlowArrow />
+        <FlowNode
+          dark
+          icon={LockKeyhole}
+          title="MODi"
+          detail="Redacts, checks, verifies"
+          items={['Privacy-safe', 'Policy-matched', 'Agent-signed']}
+        />
+        <FlowArrow />
+        <FlowNode
+          icon={DatabaseZap}
+          title="Company"
+          detail="Gets usable data"
+          items={['Encrypted file', 'Audit trail']}
+        />
       </div>
     </div>
   )
 }
 
-function PreviewIconButton({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+function FlowArrow() {
   return (
-    <button
-      className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white/80 transition-colors hover:bg-white/15 hover:text-white"
-      type="button"
-      aria-label={label}
-    >
-      <Icon className="h-4 w-4" />
-    </button>
-  )
-}
-
-function ResearchTable() {
-  return (
-    <div className="mt-4 overflow-x-auto">
-      <table className="w-full min-w-[640px] text-left text-sm">
-        <thead className="text-xs text-ink-mute">
-          <tr className="border-b border-border">
-            <th className="py-3 font-medium">연구</th>
-            <th className="py-3 font-medium">상태</th>
-            <th className="py-3 font-medium">신청/승인</th>
-            <th className="py-3 font-medium">데이터 범위</th>
-            <th className="py-3 text-right font-medium">예치 보상</th>
-          </tr>
-        </thead>
-        <tbody>
-          {studies.map((study) => (
-            <tr key={study.id} className="border-b border-border last:border-0">
-              <td className="py-3 pr-5">
-                <p className="font-medium text-ink">{study.title}</p>
-                <p className="tabular mt-1 text-xs text-ink-mute">{study.id}</p>
-              </td>
-              <td className="py-3 pr-5">
-                <span className="inline-flex rounded-full bg-[#b9b9f9] px-2.5 py-1 text-xs font-medium text-[#4434d4]">
-                  {study.status}
-                </span>
-              </td>
-              <td className="tabular py-3 pr-5 text-ink-secondary">
-                {study.applicants} / {study.approved}
-                <div className="mt-2 h-1.5 w-24 overflow-hidden rounded-full bg-canvas-soft">
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${(study.approved / study.applicants) * 100}%` }} />
-                </div>
-              </td>
-              <td className="py-3 pr-5 text-ink-secondary">{study.dataScope}</td>
-              <td className="tabular py-3 text-right text-ink">{study.rewardPool}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="flex items-center justify-center text-primary md:px-1">
+      <ArrowRight className="hidden h-7 w-7 md:block" strokeWidth={2.2} />
+      <div className="h-8 w-px bg-border md:hidden" />
     </div>
   )
 }
 
-function ApplicantQueue() {
+function FlowNode({
+  dark = false,
+  detail,
+  icon: Icon,
+  items,
+  title,
+}: {
+  dark?: boolean
+  detail: string
+  icon: LucideIcon
+  items: string[]
+  title: string
+}) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white p-4 text-ink">
-      <div className="flex items-center justify-between gap-3">
+    <div className={dark ? 'rounded-lg bg-brand-dark p-5 text-white' : 'rounded-lg bg-canvas-soft p-5 text-ink'}>
+      <div className="flex items-start gap-3">
+        <div className={dark ? 'flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white/10' : 'flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white'}>
+          <Icon className={dark ? 'h-5 w-5 text-white' : 'h-5 w-5 text-primary'} />
+        </div>
         <div>
-          <p className="whitespace-nowrap text-sm font-medium">참여 신청 큐</p>
-          <p className="text-xs text-ink-mute">심사 결과 기반 승인</p>
+          <p className={dark ? 'text-base font-semibold text-white' : 'text-base font-semibold text-ink'}>{title}</p>
+          <p className={dark ? 'mt-1 text-sm leading-5 text-white/65' : 'mt-1 text-sm leading-5 text-ink-secondary'}>{detail}</p>
         </div>
-        <Badge variant="outline">96 대기</Badge>
       </div>
-      <div className="mt-4 space-y-3">
-        {applicants.map((applicant) => (
-          <div key={applicant.code} className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
-            <div>
-              <p className="tabular text-sm font-medium">{applicant.code}</p>
-              <p className="mt-1 text-xs text-ink-mute">{applicant.consent}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-ink-secondary">{applicant.state}</p>
-              <p className="tabular mt-1 text-lg font-light text-ink">{applicant.score}</p>
-            </div>
+      <div className="mt-5 grid gap-2">
+        {items.map((item) => (
+          <div className={dark ? 'rounded-md bg-white/10 px-3 py-2 text-sm text-white/80' : 'rounded-md bg-white px-3 py-2 text-sm text-ink-secondary'} key={item}>
+            {item}
           </div>
         ))}
       </div>
@@ -200,139 +132,108 @@ function ApplicantQueue() {
   )
 }
 
-function DataPolicyPanel() {
-  return (
-    <div className="rounded-lg border border-white/10 bg-[#f5e9d4] p-4 text-ink">
-      <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-white/70">
-          <LockKeyhole className="h-4 w-4 text-[#533afd]" />
-        </div>
-        <div>
-          <p className="text-sm font-medium">요청별 개인정보 정책</p>
-          <p className="mt-1 text-xs leading-5 text-ink-secondary">
-            기업 요청사항은 Walrus policy memory로 관리되고, 원본 건강 데이터가 아니라 범주화된 제공 필드만 연결됩니다.
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function CapabilitiesSection() {
+function DirectParticipantAccessSection() {
   return (
     <section id="capabilities" className="bg-white py-16 sm:py-20">
-      <div className="container">
-        <div className="max-w-2xl">
-          <Badge variant="outline">Core workflows</Badge>
-          <h2 className="mt-5 text-3xl font-light leading-tight text-ink sm:text-4xl">요청 정책부터 안전한 데이터 수신까지</h2>
+      <div className="container grid gap-9 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+        <div className="max-w-xl">
+          <p className="text-sm font-medium text-ink-mute">No Privacy Drag</p>
+          <h2 className="mt-4 text-3xl font-light leading-tight text-ink sm:text-4xl">Ask for the data, not the liability.</h2>
           <p className="mt-4 text-base font-light leading-7 text-ink-secondary">
-            기관은 필요한 건강 데이터 범위를 정책으로 정의하고, 사용자는 그 정책에 맞게 안전화된 데이터만 제출합니다.
-            Privacy Agent 검증과 Walrus audit trail은 데이터가 어떤 기준으로 처리됐는지 남깁니다.
+            Participants clean sensitive fields before upload. Your team gets ready-to-use health data without becoming the first stop for raw personal records.
           </p>
         </div>
 
-        <div className="mt-9 grid gap-4 md:grid-cols-3">
-          {capabilities.map((capability) => {
-            const Icon = capability.icon
-
-            return (
-              <Card key={capability.title}>
-                <CardHeader>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-canvas-soft">
-                    <Icon className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="mb-2 text-xs font-medium uppercase text-ink-mute">{capability.meta}</p>
-                    <CardTitle>{capability.title}</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <CardDescription>{capability.description}</CardDescription>
-                </CardContent>
-              </Card>
-            )
-          })}
+        <div className="rounded-lg border border-border bg-canvas-soft p-5">
+          <div className="flex items-center justify-between gap-3 border-b border-border pb-4">
+            <div>
+              <p className="text-sm font-medium text-ink">Live participant intake</p>
+              <p className="text-xs text-ink-mute">Privacy-ready submissions</p>
+            </div>
+            <Users className="h-5 w-5 text-primary" />
+          </div>
+          <div className="mt-4 grid gap-3">
+            {['Apple Health activity', 'Sleep recovery signals', 'Cardiovascular trends'].map((label, index) => (
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md bg-white p-4" key={label}>
+                <div>
+                  <p className="text-sm font-medium text-ink">{label}</p>
+                  <p className="mt-1 text-xs text-ink-mute">{index === 0 ? '184 participants connected' : index === 1 ? '156 participants connected' : '121 participants connected'}</p>
+                </div>
+                <p className="tabular text-sm text-ink-secondary">{index === 0 ? '128 ready' : index === 1 ? '74 ready' : '61 ready'}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>
   )
 }
 
-function WorkflowSection() {
+function PrivacySafeIntakeSection() {
   return (
     <section id="workflow" className="bg-canvas-soft py-16 sm:py-20">
-      <div className="container grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-        <div>
-          <Badge variant="secondary">Data governance</Badge>
-          <h2 className="mt-5 text-3xl font-light leading-tight text-ink sm:text-4xl">
-            동의, 접근, 보상을 추적하는 데이터 운영 흐름
-          </h2>
-          <p className="mt-4 text-base font-light leading-7 text-ink-secondary">
-            연구 참여가 승인되면 ConsentGrant, AccessGrant, DataAsset, RewardPaid 이벤트를 순서대로 확인할 수
-            있도록 설계합니다. 랜딩 이후 실제 대시보드 화면은 이 파이프라인을 기준으로 확장하면 됩니다.
-          </p>
-          <div id="security" className="mt-6 flex flex-wrap gap-2">
-            {trustSignals.map((signal) => {
-              const Icon = signal.icon
-
-              return (
-                <span
-                  key={signal.label}
-                  className="inline-flex items-center rounded-full border border-border bg-white px-3 py-2 text-sm text-ink-secondary"
-                >
-                  <Icon className="mr-2 h-4 w-4 text-primary" />
-                  {signal.label}
-                </span>
-              )
-            })}
+      <div className="container grid gap-9 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+        <div className="order-2 rounded-lg border border-border bg-white p-5 shadow-surface lg:order-1">
+          <div className="grid gap-3">
+            <PrivacyStep title="Policy memory" detail="Your requirements become the live rulebook." />
+            <PrivacyStep title="Local safety edit" detail="Sensitive details are stripped before upload." />
+            <PrivacyStep title="Agent verification" detail="Hidden risk is checked before delivery." />
           </div>
         </div>
 
-        <div className="rounded-lg border border-border bg-white p-5 shadow-surface">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-ink">Pipeline monitor</p>
-              <p className="text-xs text-ink-mute">연구별 데이터 제공 상태</p>
-            </div>
-            <Badge variant="outline">Live preview</Badge>
-          </div>
-          <Separator className="my-5" />
-          <div className="grid gap-3 sm:grid-cols-2">
-            {pipelineEvents.map((event) => {
-              const Icon = event.icon
+        <div className="order-1 max-w-xl lg:order-2">
+          <p className="text-sm font-medium text-ink-mute">Agent Privacy Gate</p>
+          <h2 className="mt-4 text-3xl font-light leading-tight text-ink sm:text-4xl">One more check before anything reaches you.</h2>
+          <p className="mt-4 text-base font-light leading-7 text-ink-secondary">
+            MODi's Security Agent reads your collection policy, spots hidden re-identification risk, and applies safer edits before delivery.
+          </p>
+        </div>
+      </div>
+    </section>
+  )
+}
 
-              return (
-                <div key={event.label} className="rounded-md border border-border p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-md bg-canvas-soft">
-                      <Icon className="h-4 w-4 text-primary" />
-                    </div>
-                    <div>
-                      <p className="tabular text-sm font-medium text-ink">{event.label}</p>
-                      <p className="mt-1 text-sm leading-6 text-ink-mute">{event.detail}</p>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
+function PrivacyStep({ detail, title }: { detail: string; title: string }) {
+  return (
+    <div className="flex items-start gap-4 rounded-md border border-border p-4">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-canvas-soft">
+        <LockKeyhole className="h-4 w-4 text-primary" />
+      </div>
+      <div>
+        <p className="text-sm font-medium text-ink">{title}</p>
+        <p className="mt-1 text-sm leading-6 text-ink-secondary">{detail}</p>
+      </div>
+    </div>
+  )
+}
+
+function ReadyDatasetsSection() {
+  return (
+    <section className="bg-white py-16 sm:py-20">
+      <div className="container grid gap-9 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+        <div className="max-w-xl">
+          <p className="text-sm font-medium text-ink-mute">Proof-Ready Delivery</p>
+          <h2 className="mt-4 text-3xl font-light leading-tight text-ink sm:text-4xl">Data your team can trust later.</h2>
+          <p className="mt-4 text-base font-light leading-7 text-ink-secondary">
+            Each package arrives encrypted, download-ready, and tied to Walrus-backed policy context with Agent receipts your team can inspect later.
+          </p>
+        </div>
+
+        <div className="rounded-lg bg-brand-dark p-5 text-white shadow-dashboard">
+          <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+            <div>
+              <p className="text-sm font-medium">Dataset handoff</p>
+              <p className="mt-1 text-xs text-white/60">Verified, encrypted, ready</p>
+            </div>
+            <DatabaseZap className="h-5 w-5 text-white" />
           </div>
-          <div className="mt-5 rounded-lg bg-brand-dark p-4 text-white">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium">정책 통과율</p>
-                <p className="mt-1 text-xs text-white/60">wearable_health_record schema 기준</p>
+          <div className="mt-5 grid gap-3">
+            {['Encrypted health dataset', 'Security Agent receipt', 'Walrus audit trail'].map((item) => (
+              <div className="flex items-center justify-between gap-3 rounded-md bg-white/10 p-4" key={item}>
+                <p className="text-sm text-white">{item}</p>
+                <p className="text-xs text-white/60">Ready</p>
               </div>
-              <p className="tabular text-3xl font-light">99.2%</p>
-            </div>
-            <div className="mt-4 grid grid-cols-12 gap-1">
-              {Array.from({ length: 12 }).map((_, index) => (
-                <span
-                  key={index}
-                  className="h-2 rounded-full"
-                  style={{ backgroundColor: index > 9 ? '#b9b9f9' : '#533afd' }}
-                />
-              ))}
-            </div>
+            ))}
           </div>
         </div>
       </div>
@@ -347,7 +248,7 @@ function Footer() {
         <p>MODi Institution Dashboard</p>
         <div className="flex items-center gap-2 text-ink-secondary">
           <ShieldCheck className="h-4 w-4 text-primary" />
-          <span>Consent-first research operations</span>
+          <span>Policy-adaptive healthcare MyData privacy workflow</span>
         </div>
       </div>
     </footer>

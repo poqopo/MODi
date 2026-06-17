@@ -79,7 +79,7 @@ export function AuthGate({ children, onGoHome }: AuthGateProps) {
         .catch((error) => {
           if (!isCanceled) {
             setSlushInstitution(null)
-            setSlushInstitutionError(error instanceof Error ? error.message : '기관 등록 상태를 확인하지 못했습니다.')
+            setSlushInstitutionError(error instanceof Error ? error.message : 'Could not check institution registration status.')
           }
         })
         .finally(() => {
@@ -128,7 +128,7 @@ export function AuthGate({ children, onGoHome }: AuthGateProps) {
       window.localStorage.setItem(demoInstitutionStorageKey, profile.institutionSlug)
       setDemoLoginId(profile.institutionSlug)
     } catch (error) {
-      setSlushInstitutionError(error instanceof Error ? error.message : '기관을 등록하지 못했습니다.')
+      setSlushInstitutionError(error instanceof Error ? error.message : 'Could not register institution.')
     } finally {
       setIsRegisteringSlushInstitution(false)
     }
@@ -137,7 +137,7 @@ export function AuthGate({ children, onGoHome }: AuthGateProps) {
   if (isLoading) {
     return (
       <section className="flex min-h-screen items-center justify-center bg-page px-6">
-        <div className="text-sm font-medium text-ink-secondary">기관 세션을 확인하고 있습니다.</div>
+        <div className="text-sm font-medium text-ink-secondary">Checking institution session.</div>
       </section>
     )
   }
@@ -178,7 +178,7 @@ export function AuthGate({ children, onGoHome }: AuthGateProps) {
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-dark text-xs font-semibold text-white">
               M
             </span>
-            <span className="text-sm font-semibold text-ink">기관 운영 콘솔</span>
+            <span className="text-sm font-semibold text-ink">Institution Operations Console</span>
           </button>
           <div className="flex items-center gap-2">
             {account ? (
@@ -193,11 +193,11 @@ export function AuthGate({ children, onGoHome }: AuthGateProps) {
             )}
             <Button variant="ghost" size="sm" onClick={onGoHome}>
               <ArrowLeft className="mr-2 h-4 w-4" />
-              랜딩으로
+              Landing
             </Button>
             <Button variant="outline" size="sm" onClick={handleSignOut}>
               <LogOut className="mr-2 h-4 w-4" />
-              로그아웃
+              Sign out
             </Button>
           </div>
         </div>
@@ -212,14 +212,14 @@ function SupabaseConfigRequired({ onGoHome }: { onGoHome: () => void }) {
     <section className="flex min-h-screen items-center justify-center bg-page px-6">
       <Card className="w-full max-w-xl rounded-lg border-border shadow-sm">
         <CardHeader>
-          <CardTitle>Supabase 설정이 필요합니다</CardTitle>
+          <CardTitle>Supabase Configuration Required</CardTitle>
           <CardDescription>
-            기관 대시보드를 실제 DB와 연결하려면 Vite 환경변수에 Supabase 프로젝트 정보를 넣어야 합니다.
+            Add the Supabase project settings to the Vite environment variables to connect this dashboard to the live database.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="rounded-lg border border-border bg-white p-4 text-sm text-ink-secondary">
-            <div className="font-medium text-ink">필요한 값</div>
+            <div className="font-medium text-ink">Required values</div>
             <div className="mt-2 font-mono text-xs leading-6">
               VITE_SUPABASE_URL
               <br />
@@ -227,7 +227,7 @@ function SupabaseConfigRequired({ onGoHome }: { onGoHome: () => void }) {
             </div>
           </div>
           <Button variant="outline" onClick={onGoHome}>
-            랜딩으로 돌아가기
+            Back to landing
           </Button>
         </CardContent>
       </Card>
@@ -240,15 +240,15 @@ function SlushInstitutionLoadingPanel({ onGoHome, walletAddress }: { onGoHome: (
     <section className="flex min-h-screen items-center justify-center bg-page px-6">
       <Card className="w-full max-w-md rounded-lg border-border shadow-sm">
         <CardHeader>
-          <CardTitle>기관 등록 상태 확인</CardTitle>
-          <CardDescription>연결된 Slush 지갑에 등록된 기관이 있는지 확인하고 있습니다.</CardDescription>
+          <CardTitle>Checking Institution Registration</CardTitle>
+          <CardDescription>Checking whether the connected Slush wallet already has an institution profile.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-md border border-border bg-canvas-soft px-3 py-2 font-mono text-xs text-ink-secondary">
             {formatWalletAddress(walletAddress)}
           </div>
           <Button variant="outline" onClick={onGoHome}>
-            랜딩으로
+            Landing
           </Button>
         </CardContent>
       </Card>
@@ -285,12 +285,12 @@ function SlushInstitutionRegistrationPanel({
     <section className="flex min-h-screen items-center justify-center bg-page px-6">
       <Card className="w-full max-w-md rounded-lg border-border shadow-sm">
         <CardHeader>
-          <CardTitle>기관 등록</CardTitle>
-          <CardDescription>이 Slush 지갑으로 연구를 만들려면 먼저 기관명을 등록해야 합니다.</CardDescription>
+          <CardTitle>Register Institution</CardTitle>
+          <CardDescription>Register an institution name before creating studies with this Slush wallet.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mb-4 rounded-md border border-border bg-canvas-soft px-3 py-2">
-            <p className="text-xs text-ink-mute">연결된 Slush 지갑</p>
+            <p className="text-xs text-ink-mute">Connected Slush wallet</p>
             <p className="mt-1 font-mono text-xs text-ink">{formatWalletAddress(walletAddress)}</p>
           </div>
           {errorMessage ? (
@@ -300,16 +300,16 @@ function SlushInstitutionRegistrationPanel({
           ) : null}
           <form className="space-y-4" onSubmit={handleSubmit}>
             <label className="block text-sm font-medium text-ink">
-              기관명
+              Institution name
               <input
                 className="mt-2 h-11 w-full rounded-md border border-border bg-white px-3 text-sm outline-none transition focus:border-brand"
                 name="institutionName"
-                placeholder="예: MODi Research Lab"
+                placeholder="e.g. MODi Research Lab"
                 required
               />
             </label>
             <label className="block text-sm font-medium text-ink">
-              웹사이트
+              Website
               <input
                 className="mt-2 h-11 w-full rounded-md border border-border bg-white px-3 text-sm outline-none transition focus:border-brand"
                 name="websiteUrl"
@@ -318,15 +318,15 @@ function SlushInstitutionRegistrationPanel({
               />
             </label>
             <Button className="w-full" type="submit" disabled={isSaving}>
-              {isSaving ? '등록 중' : '기관 등록하기'}
+              {isSaving ? 'Registering' : 'Register Institution'}
             </Button>
           </form>
           <div className="mt-5 flex items-center justify-between text-sm">
             <button className="text-ink-secondary" type="button" onClick={onGoHome}>
-              랜딩으로
+              Landing
             </button>
             <button className="font-medium text-brand-dark" type="button" onClick={onSignOut}>
-              다른 지갑으로 연결
+              Connect another wallet
             </button>
           </div>
         </CardContent>
@@ -362,13 +362,13 @@ function AuthForm({ onDemoLogin, onGoHome }: { onDemoLogin: (loginId: string) =>
     <section className="flex min-h-screen items-center justify-center bg-page px-6">
       <Card className="w-full max-w-md rounded-lg border-border shadow-sm">
         <CardHeader>
-          <CardTitle>기관명 로그인</CardTitle>
-          <CardDescription>등록한 기관명을 입력해 운영 콘솔로 들어갑니다.</CardDescription>
+          <CardTitle>Institution Name Login</CardTitle>
+          <CardDescription>Enter the registered institution name to open the operations console.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
             <label className="block text-sm font-medium text-ink">
-              기관명
+              Institution name
               <input
                 className="mt-2 h-11 w-full rounded-md border border-border bg-white px-3 text-sm outline-none transition focus:border-brand"
                 type="text"
@@ -392,12 +392,12 @@ function AuthForm({ onDemoLogin, onGoHome }: { onDemoLogin: (loginId: string) =>
             ))}
             </div>
             <Button className="w-full" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? '확인 중' : '대시보드 들어가기'}
+              {isSubmitting ? 'Checking' : 'Open Dashboard'}
             </Button>
           </form>
           <div className="mt-5 flex items-center justify-end text-sm">
             <button className="text-ink-secondary" type="button" onClick={onGoHome}>
-              랜딩으로
+              Landing
             </button>
           </div>
         </CardContent>

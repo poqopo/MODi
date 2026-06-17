@@ -7,7 +7,7 @@ export type ConnectedHealthApp = {
   name: string
   description: string
   dataTypes: string[]
-  status: '연동됨' | '연동 가능' | '확인 필요'
+  status: 'Connected' | 'Available' | 'Needs Review'
   icon: LucideIcon
 }
 

@@ -128,16 +128,16 @@ export async function fetchAppleHealthSnapshot(): Promise<AppleHealthResult> {
     }
   } catch (error) {
     return {
-      error: error instanceof Error ? error.message : 'Apple 건강 데이터를 가져오지 못했습니다.',
+      error: error instanceof Error ? error.message : 'Could not fetch Apple Health data.',
       status: 'error',
     }
   }
 }
 
 export function getAppleHealthSupportMessage(reason: 'platform' | 'unavailable' | 'authorization') {
-  if (reason === 'platform') return 'Apple 건강정보는 iOS 실기기 또는 iOS 개발 빌드에서만 사용할 수 있습니다.'
-  if (reason === 'authorization') return 'Apple 건강정보 읽기 권한이 필요합니다. iOS 건강 앱 설정에서 권한을 확인해 주세요.'
-  return '이 기기에서는 Apple 건강정보를 사용할 수 없습니다.'
+  if (reason === 'platform') return 'Apple Health is available only on a real iOS device or an iOS development build.'
+  if (reason === 'authorization') return 'Apple Health read permission is required. Check permissions in the iOS Health app settings.'
+  return 'Apple Health is not available on this device.'
 }
 
 function summarizeSleep(samples: readonly CategorySampleTyped<'HKCategoryTypeIdentifierSleepAnalysis'>[]) {

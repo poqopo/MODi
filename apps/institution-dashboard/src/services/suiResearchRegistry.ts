@@ -94,7 +94,7 @@ export async function createOnChainDataRequest({
   })
 
   if (result.FailedTransaction) {
-    throw new Error(result.FailedTransaction.status.error?.message ?? 'DataRequest 온체인 생성 트랜잭션이 실패했습니다.')
+    throw new Error(result.FailedTransaction.status.error?.message ?? 'DataRequest on-chain creation transaction failed.')
   }
 
   const transaction = result.Transaction
@@ -119,7 +119,7 @@ export async function createOnChainDataRequest({
   }
 
   if (!suiDataRequestId) {
-    throw new Error(`DataRequest object id를 트랜잭션 결과에서 찾지 못했습니다. 트랜잭션 digest: ${transaction.digest}`)
+    throw new Error(`Could not find the DataRequest object ID in the transaction result. Transaction digest: ${transaction.digest}`)
   }
 
   debugResearchRegistry('created objects', {
@@ -149,7 +149,7 @@ function readCurrentWalletAddress(dAppKit: RegisteredDAppKit) {
   const connection = dAppKit.stores.$connection.get()
 
   if (!connection.account) {
-    throw new Error('기관 Slush 지갑 연결이 필요합니다.')
+    throw new Error('Institution Slush wallet connection is required.')
   }
 
   return connection.account.address
@@ -354,7 +354,7 @@ async function fetchCreatedOnChainObjectsFromJsonRpc({
   })
 
   if (!response.ok) {
-    throw new Error(`Sui fullnode 트랜잭션 조회에 실패했습니다. (${response.status})`)
+    throw new Error(`Failed to query the Sui fullnode transaction. (${response.status})`)
   }
 
   const payload = await response.json() as SuiJsonRpcTransactionBlockResponse
@@ -367,7 +367,7 @@ async function fetchCreatedOnChainObjectsFromJsonRpc({
   const status = payload.result?.effects?.status
 
   if (status?.status === 'failure') {
-    throw new Error(status.error ?? 'Sui 트랜잭션이 실패했습니다.')
+    throw new Error(status.error ?? 'Sui transaction failed.')
   }
 
   const objectChanges = payload.result?.objectChanges ?? []

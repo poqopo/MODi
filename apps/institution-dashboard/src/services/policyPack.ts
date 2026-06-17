@@ -73,20 +73,20 @@ const POLICY_PACK_VERSION = '1.0.0'
 const SUBMISSION_SCHEMA_VERSION = 'modi.participant-submission.v1'
 
 const policyByScope: Record<string, { key: string; policy: string; source: string }> = {
-  'VO2 max': { key: 'vo2_max', policy: '정확 수치 제거 후 band만 허용', source: 'apple_health' },
-  '걸음': { key: 'step_count', policy: '일별 원본값 제거 후 월 단위 구간화', source: 'apple_health' },
-  '수면 단계': { key: 'sleep_stage', policy: '단계별 비율만 허용하고 세션 원본 제거', source: 'wearable' },
-  '수면 시간': { key: 'sleep_duration', policy: '분 단위 원본값 제거 후 구간화', source: 'wearable' },
-  '수면 효율': { key: 'sleep_efficiency', policy: '정확 비율 제거 후 band만 허용', source: 'wearable' },
-  '심박수': { key: 'heart_rate', policy: '정확 bpm 제거 후 구간화', source: 'wearable' },
-  '안정시 심박수': { key: 'resting_heart_rate', policy: '정확 bpm 제거 후 band만 허용', source: 'wearable' },
-  '체중': { key: 'weight_band', policy: '정확 체중 제거 후 구간화', source: 'health_profile' },
-  '혈중 산소': { key: 'oxygen_saturation', policy: '정확 SpO2 제거 후 band만 허용', source: 'wearable' },
-  'HRV': { key: 'hrv_band', policy: '정확 수치 제거 후 회복 band만 허용', source: 'wearable' },
-  '기기 유형': { key: 'device_type', policy: '상세 모델명 제거 후 기기 범주만 허용', source: 'device' },
-  '기록 월': { key: 'recorded_month', policy: '일 단위 날짜 제거 후 월 단위만 허용', source: 'system' },
-  '운동 시간': { key: 'exercise_minutes', policy: '분 단위 원본값 제거 후 구간화', source: 'apple_health' },
-  '활동 에너지': { key: 'active_energy', policy: '정확 kcal 제거 후 band만 허용', source: 'apple_health' },
+  'VO2 max': { key: 'vo2_max', policy: 'Remove exact values; allow bands only', source: 'apple_health' },
+  'Steps': { key: 'step_count', policy: 'Remove daily raw values; aggregate into monthly bands', source: 'apple_health' },
+  'Sleep stages': { key: 'sleep_stage', policy: 'Allow stage ratios only and remove raw sessions', source: 'wearable' },
+  'Sleep duration': { key: 'sleep_duration', policy: 'Remove minute-level raw values; convert to bands', source: 'wearable' },
+  'Sleep efficiency': { key: 'sleep_efficiency', policy: 'Remove exact ratios; allow bands only', source: 'wearable' },
+  'Heart rate': { key: 'heart_rate', policy: 'Remove exact BPM; convert to bands', source: 'wearable' },
+  'Resting heart rate': { key: 'resting_heart_rate', policy: 'Remove exact BPM; allow bands only', source: 'wearable' },
+  'Weight': { key: 'weight_band', policy: 'Remove exact weight; convert to bands', source: 'health_profile' },
+  'Blood oxygen': { key: 'oxygen_saturation', policy: 'Remove exact SpO2; allow bands only', source: 'wearable' },
+  'HRV': { key: 'hrv_band', policy: 'Remove exact values; allow recovery bands only', source: 'wearable' },
+  'Device type': { key: 'device_type', policy: 'Remove detailed model names; allow device category only', source: 'device' },
+  'Recorded month': { key: 'recorded_month', policy: 'Remove day-level dates; allow month-level time only', source: 'system' },
+  'Exercise minutes': { key: 'exercise_minutes', policy: 'Remove minute-level raw values; convert to bands', source: 'apple_health' },
+  'Active energy': { key: 'active_energy', policy: 'Remove exact kcal; allow bands only', source: 'apple_health' },
 }
 
 export async function createAndStorePolicyPack({
@@ -152,7 +152,7 @@ export function buildResearchPolicyPack({
     },
     requestedData: input.dataScope.map((scope) => policyByScope[scope] ?? {
       key: normalizeKey(scope),
-      policy: '직접 식별자와 정확한 원본값 제거',
+      policy: 'Remove direct identifiers and exact raw values',
       source: 'user_health_data',
     }),
     transformPolicy: {
@@ -201,7 +201,7 @@ async function uploadJsonToWalrus(serializedJson: string): Promise<WalrusUploadR
   const responseBody = parseJson(responseText)
 
   if (!response.ok) {
-    throw new Error(`policy_pack Walrus 저장에 실패했습니다. ${responseText || response.statusText}`)
+    throw new Error(`Failed to store policy_pack on Walrus. ${responseText || response.statusText}`)
   }
 
   const parsed = parseWalrusUploadResponse(responseBody)
@@ -223,7 +223,7 @@ function parseWalrusUploadResponse(responseBody: unknown) {
   const txDigest = readString(event?.txDigest) ?? readString(newlyCreated?.txDigest) ?? readString(alreadyCertified?.txDigest)
 
   if (!blobId) {
-    throw new Error('policy_pack Walrus 응답에서 blob ID를 찾을 수 없습니다.')
+    throw new Error('Could not find the blob ID in the policy_pack Walrus response.')
   }
 
   return {
@@ -244,15 +244,15 @@ async function sha256Hex(value: string) {
 function inferAllowedUse(purpose: string) {
   const text = purpose.toLowerCase()
 
-  if (text.includes('리워드') || text.includes('보험') || text.includes('reward') || text.includes('insurance')) {
+  if (text.includes('reward') || text.includes('insurance') || text.includes('incentive')) {
     return 'reward_validation'
   }
 
-  if (text.includes('코칭') || text.includes('coaching')) {
+  if (text.includes('coaching')) {
     return 'personalized_coaching'
   }
 
-  if (text.includes('모니터링') || text.includes('monitoring')) {
+  if (text.includes('monitoring')) {
     return 'remote_monitoring'
   }
 
@@ -260,7 +260,7 @@ function inferAllowedUse(purpose: string) {
 }
 
 function normalizeKey(value: string) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9가-힣]+/g, '_').replace(/^_+|_+$/g, '')
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
 }
 
 function readWalrusPublisherUrl() {

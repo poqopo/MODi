@@ -48,7 +48,7 @@ type ProjectMenuItem = {
 
 type Project = DashboardProject
 
-type ApplicantDecision = '승인' | '거절'
+type ApplicantDecision = 'Approve' | 'Reject'
 type ApplicantRecord = DashboardApplicant
 type SubmissionRecord = DashboardSubmission
 type SettlementRecord = DashboardSettlement
@@ -57,14 +57,14 @@ type RefreshDashboardOptions = {
 }
 
 const projectMenus: ProjectMenuItem[] = [
-  { key: 'participants', label: '참여자 관리', detail: '신청자/참여자 관리', icon: Users },
-  { key: 'datasets', label: '데이터 관리', detail: '헬스케어 데이터 다운로드', icon: DatabaseZap },
-  { key: 'settlements', label: '보상/정산', detail: 'RewardEscrow 지급', icon: Wallet },
+  { key: 'participants', label: 'Participant Management', detail: 'Applicant and participant management', icon: Users },
+  { key: 'datasets', label: 'Data Management', detail: 'Healthcare data download', icon: DatabaseZap },
+  { key: 'settlements', label: 'Rewards / Settlement', detail: 'RewardEscrow payout', icon: Wallet },
 ]
 
 const schemaRows = [
-  { field: 'ageRange', source: 'Profile', policy: '연령대만 저장', enabled: true },
-  { field: 'recordedMonth', source: 'System', policy: '월 단위 시간', enabled: true },
+  { field: 'ageRange', source: 'Profile', policy: 'Store age range only', enabled: true },
+  { field: 'recordedMonth', source: 'System', policy: 'Month-level time only', enabled: true },
 ]
 
 type DataCategoryOption = {
@@ -80,45 +80,45 @@ type DataCategoryGroup = {
 
 const dataCategoryGroups: DataCategoryGroup[] = [
   {
-    label: '활동',
+    label: 'Activity',
     options: [
-      { key: '걸음', source: 'Apple Health', detail: '일별 걸음 수 band' },
-      { key: '운동 시간', source: 'Apple Health', detail: '운동 시간 구간' },
-      { key: '활동 에너지', source: 'Apple Health', detail: '활동 kcal band' },
-      { key: 'VO2 max', source: 'Apple Health', detail: '심폐지구력 band' },
+      { key: 'Steps', source: 'Apple Health', detail: 'Daily step count band' },
+      { key: 'Exercise minutes', source: 'Apple Health', detail: 'exercise minute band' },
+      { key: 'Active energy', source: 'Apple Health', detail: 'active kcal band' },
+      { key: 'VO2 max', source: 'Apple Health', detail: 'cardio fitness band' },
     ],
   },
   {
-    label: '수면/회복',
+    label: 'Sleep / Recovery',
     options: [
-      { key: '수면 시간', source: 'Wearable', detail: '수면 시간 구간' },
-      { key: '수면 효율', source: 'Wearable', detail: '효율 band' },
-      { key: '수면 단계', source: 'Wearable', detail: '단계별 비율' },
-      { key: 'HRV', source: 'Wearable', detail: '회복 band' },
+      { key: 'Sleep duration', source: 'Wearable', detail: 'sleep duration band' },
+      { key: 'Sleep efficiency', source: 'Wearable', detail: 'efficiency band' },
+      { key: 'Sleep stages', source: 'Wearable', detail: 'stage ratio' },
+      { key: 'HRV', source: 'Wearable', detail: 'recovery band' },
     ],
   },
   {
-    label: '바이탈',
+    label: 'Vitals',
     options: [
-      { key: '심박수', source: 'Wearable', detail: '심박 구간' },
-      { key: '안정시 심박수', source: 'Wearable', detail: '안정시 band' },
-      { key: '혈중 산소', source: 'Wearable', detail: 'SpO2 band' },
-      { key: '체중', source: 'Health Profile', detail: '체중 구간' },
+      { key: 'Heart rate', source: 'Wearable', detail: 'heart rate band' },
+      { key: 'Resting heart rate', source: 'Wearable', detail: 'resting band' },
+      { key: 'Blood oxygen', source: 'Wearable', detail: 'SpO2 band' },
+      { key: 'Weight', source: 'Health Profile', detail: 'Weight range' },
     ],
   },
   {
-    label: '메타데이터',
+    label: 'Metadata',
     options: [
-      { key: '기기 유형', source: 'Device', detail: '기기 범주' },
-      { key: '기록 월', source: 'System', detail: '월 단위 기간' },
+      { key: 'Device type', source: 'Device', detail: 'device category' },
+      { key: 'Recorded month', source: 'System', detail: 'month-level period' },
     ],
   },
 ]
-const defaultDataCategories = ['걸음', '운동 시간', 'VO2 max']
+const defaultDataCategories = ['Steps', 'Exercise minutes', 'VO2 max']
 const dataCategoryOptions = dataCategoryGroups.flatMap((group) => group.options)
 const dataCategoryOptionByKey = Object.fromEntries(dataCategoryOptions.map((option) => [option.key, option]))
 const ageRanges = ['20-29', '30-39', '40-49', '50-59']
-const applicantDecisions: ApplicantDecision[] = ['승인', '거절']
+const applicantDecisions: ApplicantDecision[] = ['Approve', 'Reject']
 
 type ResearchCreatePageProps = {
   isCreateRoute: boolean
@@ -164,7 +164,7 @@ export function ResearchCreatePage({
       setDashboardData(nextData)
       return nextData
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '대시보드 데이터를 불러오지 못했습니다.')
+      setErrorMessage(error instanceof Error ? error.message : 'Could not load dashboard data.')
       return null
     } finally {
       if (showLoading) {
@@ -231,7 +231,7 @@ export function ResearchCreatePage({
 
   const handleCreateProject = async (input: CreateResearchProjectInput) => {
     if (!researcherSuiAddress) {
-      setErrorMessage('연구 생성을 위해 기관 Slush 지갑 연결이 필요합니다.')
+      setErrorMessage('Connect the institution Slush wallet before creating a study.')
       return
     }
 
@@ -261,7 +261,7 @@ export function ResearchCreatePage({
       await refreshDashboard()
       onProjectRoute(projectId, 'home', { replace: true })
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '연구를 생성하지 못했습니다.')
+      setErrorMessage(error instanceof Error ? error.message : 'Could not create study.')
     } finally {
       setIsSavingProject(false)
     }
@@ -275,14 +275,14 @@ export function ResearchCreatePage({
       await createInstitutionForCurrentUser(input)
       await refreshDashboard()
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '기관을 생성하지 못했습니다.')
+      setErrorMessage(error instanceof Error ? error.message : 'Could not create institution.')
     } finally {
       setIsSavingInstitution(false)
     }
   }
 
   const handleApplicantReview = async (applicantId: string, decision: ApplicantDecision) => {
-    const nextStatus: Extract<ApplicantStatus, 'approved' | 'rejected'> = decision === '승인' ? 'approved' : 'rejected'
+    const nextStatus: Extract<ApplicantStatus, 'approved' | 'rejected'> = decision === 'Approve' ? 'approved' : 'rejected'
 
     setPendingApplicantId(applicantId)
     setErrorMessage('')
@@ -291,7 +291,7 @@ export function ResearchCreatePage({
       await updateApplicationStatus(applicantId, nextStatus)
       setDashboardData((current) => updateApplicantInDashboard(current, applicantId, nextStatus))
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '참여 신청 상태를 업데이트하지 못했습니다.')
+      setErrorMessage(error instanceof Error ? error.message : 'Could not update application status.')
     } finally {
       setPendingApplicantId(null)
     }
@@ -305,7 +305,7 @@ export function ResearchCreatePage({
       const transaction = await markSettlementSettled(settlementId)
       setDashboardData((current) => updateSettlementInDashboard(current, settlementId, transaction))
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '정산 상태를 업데이트하지 못했습니다.')
+      setErrorMessage(error instanceof Error ? error.message : 'Could not update settlement status.')
     } finally {
       setPendingSettlementId(null)
     }
@@ -433,7 +433,7 @@ function updateSettlementInDashboard(
 function LoadingPanel() {
   return (
     <Card>
-      <CardContent className="p-8 text-sm text-ink-secondary">Supabase에서 기관 대시보드 데이터를 불러오는 중입니다.</CardContent>
+      <CardContent className="p-8 text-sm text-ink-secondary">Loading institution dashboard data from Supabase.</CardContent>
     </Card>
   )
 }
@@ -459,24 +459,24 @@ function MembershipRequiredPanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>기관 멤버십이 필요합니다</CardTitle>
+        <CardTitle>Institution Membership Required</CardTitle>
         <CardDescription>
-          현재 로그인한 Auth 사용자를 기관 owner로 연결해야 연구를 생성하고 데이터를 관리할 수 있습니다.
+          Connect the current Auth user as the institution owner before creating studies and managing data.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <Field label="기관명">
+          <Field label="Institution name">
             <input className={inputClassName} name="institutionName" defaultValue="MODi Research Lab" required />
           </Field>
-          <Field label="기관 slug">
+          <Field label="Institution slug">
             <input className={inputClassName} name="institutionSlug" defaultValue="modi-research-lab" required />
           </Field>
-          <Field label="웹사이트">
+          <Field label="Website">
             <input className={inputClassName} name="websiteUrl" placeholder="https://example.org" type="url" />
           </Field>
           <Button type="submit" disabled={isSaving}>
-            {isSaving ? '기관 생성 중' : '기관 생성하기'}
+            {isSaving ? 'Creating Institution' : 'Create Institution'}
           </Button>
         </form>
       </CardContent>
@@ -488,13 +488,13 @@ function EmptyProjectPanel({ onAddProject }: { onAddProject: () => void }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>등록된 연구가 없습니다</CardTitle>
-        <CardDescription>첫 연구를 만들면 신청자, 제출 데이터, 정산 상태를 이 대시보드에서 관리할 수 있습니다.</CardDescription>
+        <CardTitle>No Studies Registered</CardTitle>
+        <CardDescription>Create the first study to manage applicants, submitted data, and settlement status from this dashboard.</CardDescription>
       </CardHeader>
       <CardContent>
         <Button type="button" onClick={onAddProject}>
           <Plus className="mr-2 h-4 w-4" />
-          프로젝트 추가하기
+          Add Project
         </Button>
       </CardContent>
     </Card>
@@ -505,8 +505,8 @@ function WalletRequiredPanel() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>기관 Slush 지갑</CardTitle>
-        <CardDescription>연구를 만들려면 복호화 권한을 받을 기관 Sui 주소가 필요합니다.</CardDescription>
+        <CardTitle>Institution Slush Wallet</CardTitle>
+        <CardDescription>A Sui address is required so the institution can receive decryption access for study submissions.</CardDescription>
       </CardHeader>
       <CardContent>
         <ConnectButton />
@@ -536,10 +536,10 @@ function ResearchSidebar({
     <aside className="flex min-w-0 flex-col rounded-lg bg-brand-dark p-4 text-white shadow-dashboard lg:sticky lg:top-20 lg:h-[calc(100vh-96px)]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-medium">진행 프로젝트</p>
+          <p className="text-sm font-medium">Active Projects</p>
           <p className="mt-1 text-xs text-white/55">Project workspace</p>
         </div>
-        <Badge variant="dark">{projects.length}개</Badge>
+        <Badge variant="dark">{projects.length}</Badge>
       </div>
 
       <nav className="mt-5 max-h-[520px] flex-1 space-y-2 overflow-y-auto pr-1 lg:max-h-none" aria-label="Project navigation">
@@ -619,7 +619,7 @@ function ResearchSidebar({
           onClick={onAddProject}
         >
           <Plus className="mr-2 h-4 w-4" />
-          프로젝트 추가하기
+          Add Project
         </Button>
       </div>
     </aside>
@@ -656,7 +656,7 @@ function ProjectCreateForm({
     const accessPeriodDays = parseNumber(formData.get('accessPeriodDays'))
 
     onCreateProject({
-      title: getFormValue(formData, 'title') || '새 연구',
+      title: getFormValue(formData, 'title') || 'New Study',
       purpose: getFormValue(formData, 'purpose'),
       description: getFormValue(formData, 'description'),
       targetParticipants,
@@ -676,7 +676,7 @@ function ProjectCreateForm({
       <DataSchemaCard selectedDataCategories={selectedDataCategories} />
       <div className="flex justify-end">
         <Button type="submit" disabled={isSaving || selectedDataCategories.length === 0}>
-          {isSaving ? '저장 중' : '연구 생성'}
+          {isSaving ? 'Saving' : 'Create Study'}
         </Button>
       </div>
     </form>
@@ -687,8 +687,8 @@ function SlushResearcherCard({ researcherSuiAddress }: { researcherSuiAddress: s
   return (
     <Card>
       <CardHeader>
-        <CardTitle>복호화 지갑</CardTitle>
-        <CardDescription>참가자가 제출할 때 이 주소로 Seal AccessGrant를 발급합니다.</CardDescription>
+        <CardTitle>Decryption Wallet</CardTitle>
+        <CardDescription>Participant submissions issue a Seal AccessGrant to this address.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="rounded-md border border-border bg-canvas-soft px-3 py-2 font-mono text-xs text-ink">
@@ -722,7 +722,7 @@ function formatBytes(bytes: number) {
     unitIndex += 1
   }
 
-  return `${value.toLocaleString('ko-KR', { maximumFractionDigits: value >= 10 ? 0 : 1 })} ${units[unitIndex]}`
+  return `${value.toLocaleString('en-US', { maximumFractionDigits: value >= 10 ? 0 : 1 })} ${units[unitIndex]}`
 }
 
 function parseBytesLabel(value: string) {
@@ -859,34 +859,34 @@ function ProjectSummaryCard({ applicantRecords, selectedProject }: { applicantRe
   const participants = applicantRecords.filter((record) => record.status === 'approved')
   const averageActivity =
     participants.length > 0 ? Math.round(participants.reduce((sum, record) => sum + record.score, 0) / participants.length) : 0
-  const statusReadyCount = pendingCount > 0 ? `${pendingCount}건 확인` : '정상'
+  const statusReadyCount = pendingCount > 0 ? `${pendingCount} to review` : 'All clear'
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Card>
         <CardContent className="p-4">
-          <p className="text-xs text-ink-mute">전체 참여자</p>
-          <p className="tabular mt-2 text-2xl font-light text-ink">{participants.length}명</p>
-          <p className="mt-1 text-xs text-ink-mute">목표 {selectedProject.targetLabel}</p>
+          <p className="text-xs text-ink-mute">Total Participants</p>
+          <p className="tabular mt-2 text-2xl font-light text-ink">{participants.length} people</p>
+          <p className="mt-1 text-xs text-ink-mute">Goal {selectedProject.targetLabel}</p>
         </CardContent>
       </Card>
       <Card>
         <CardContent className="p-4">
-          <p className="text-xs text-ink-mute">참여자의 활성도</p>
+          <p className="text-xs text-ink-mute">Participant Activity</p>
           <p className="tabular mt-2 text-2xl font-light text-ink">{averageActivity}%</p>
-          <p className="mt-1 text-xs text-ink-mute">최근 7일 제출 기준</p>
+          <p className="mt-1 text-xs text-ink-mute">Based on the last 7 days</p>
         </CardContent>
       </Card>
       <Card>
         <CardContent className="p-4">
-          <p className="text-xs text-ink-mute">남은 USDC양</p>
+          <p className="text-xs text-ink-mute">Remaining USDC</p>
           <p className="tabular mt-2 text-2xl font-light text-ink">{selectedProject.rewardPoolLabel}</p>
-          <p className="mt-1 text-xs text-ink-mute">정산 가능 잔액</p>
+          <p className="mt-1 text-xs text-ink-mute">Available settlement balance</p>
         </CardContent>
       </Card>
       <Card>
         <CardContent className="p-4">
-          <p className="text-xs text-ink-mute">상태 체크</p>
+          <p className="text-xs text-ink-mute">Status Check</p>
           <p className="mt-2 text-2xl font-light text-ink">{statusReadyCount}</p>
           <p className="mt-1 text-xs text-ink-mute">{selectedProject.statusLabel}</p>
         </CardContent>
@@ -913,8 +913,8 @@ function RecentApplicantsCard({
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <CardTitle>최근 신청자</CardTitle>
-            <CardDescription>신규 신청자만 빠르게 승인하거나 거절합니다</CardDescription>
+            <CardTitle>Recent Applicants</CardTitle>
+            <CardDescription>Quickly approve or reject new applicants</CardDescription>
           </div>
           <Users className="h-5 w-5 text-primary" />
         </div>
@@ -922,17 +922,17 @@ function RecentApplicantsCard({
       <CardContent>
         {recentApplicants.length === 0 ? (
           <div className="rounded-md border border-border bg-canvas-soft px-4 py-8 text-center text-sm text-ink-mute">
-            검토할 최근 신청자가 없습니다.
+            No recent applicants to review.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead className="text-xs text-ink-mute">
                 <tr className="border-b border-border">
-                  <th className="py-3 pr-5 font-medium">신청자</th>
-                  <th className="py-3 pr-5 font-medium">매칭 점수</th>
-                  <th className="py-3 pr-5 font-medium">최근 제출</th>
-                  <th className="py-3 text-right font-medium">승인 여부</th>
+                  <th className="py-3 pr-5 font-medium">Applicants</th>
+                  <th className="py-3 pr-5 font-medium">Match Score</th>
+                  <th className="py-3 pr-5 font-medium">Latest Submission</th>
+                  <th className="py-3 text-right font-medium">Decision</th>
                 </tr>
               </thead>
               <tbody>
@@ -990,19 +990,19 @@ function ParticipantManagementView({
   return (
     <div className="min-w-0 space-y-5">
       <div className="grid gap-3 sm:grid-cols-3">
-        <MiniStat label="신청자" value={`${pendingApplicants.length}명`} />
-        <MiniStat label="참여자" value={`${participants.length}명`} />
-        <MiniStat label="누적 제출량" value={totalDataSent} />
+        <MiniStat label="Applicants" value={`${pendingApplicants.length} people`} />
+        <MiniStat label="Participants" value={`${participants.length} people`} />
+        <MiniStat label="Total Volume" value={totalDataSent} />
       </div>
       <ParticipantTableSection
-        actionLabel="승인 여부"
+        actionLabel="Decision"
         onOpenSubmission={onOpenSubmission}
         pendingApplicantId={pendingApplicantId}
         rows={pendingApplicants}
-        title="신청자"
+        title="Applicants"
         onReviewApplicant={onReviewApplicant}
       />
-      <ParticipantTableSection onOpenSubmission={onOpenSubmission} rows={participants} title="참여자" />
+      <ParticipantTableSection onOpenSubmission={onOpenSubmission} rows={participants} title="Participants" />
     </div>
   )
 }
@@ -1028,23 +1028,23 @@ function ParticipantTableSection({
         <div className="flex items-center justify-between gap-3">
           <div>
             <CardTitle>{title}</CardTitle>
-            <CardDescription>대상자를 클릭하면 제출 기록을 확인할 수 있습니다</CardDescription>
+            <CardDescription>Click a person to inspect submission history</CardDescription>
           </div>
-          <Badge variant="outline">{rows.length}명</Badge>
+          <Badge variant="outline">{rows.length} people</Badge>
         </div>
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? (
-          <div className="rounded-md border border-border bg-canvas-soft px-4 py-8 text-center text-sm text-ink-mute">표시할 대상이 없습니다.</div>
+          <div className="rounded-md border border-border bg-canvas-soft px-4 py-8 text-center text-sm text-ink-mute">No people to display.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="text-xs text-ink-mute">
                 <tr className="border-b border-border">
-                  <th className="py-3 pr-5 font-medium">대상자</th>
-                  <th className="py-3 pr-5 font-medium">데이터 전송량</th>
-                  <th className="py-3 pr-5 font-medium">최근 제출</th>
-                  <th className="py-3 text-right font-medium">{actionLabel ?? '상태'}</th>
+                  <th className="py-3 pr-5 font-medium">Person</th>
+                  <th className="py-3 pr-5 font-medium">Data Sent</th>
+                  <th className="py-3 pr-5 font-medium">Latest Submission</th>
+                  <th className="py-3 text-right font-medium">{actionLabel ?? 'Status'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1117,7 +1117,7 @@ function SubmissionHistoryModal({
         objectId: submission.walrusDatasetObjectId,
       })
     } catch (error) {
-      setDownloadError(error instanceof Error ? error.message : 'Walrus 다운로드에 실패했습니다.')
+      setDownloadError(error instanceof Error ? error.message : 'Walrus download failed.')
     } finally {
       setDownloadingKey(null)
     }
@@ -1136,12 +1136,12 @@ function SubmissionHistoryModal({
       >
         <div className="flex items-start justify-between gap-4 border-b border-border p-5">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-ink">제출 기록</p>
+            <p className="text-sm font-medium text-ink">Submission History</p>
             <p className="mt-1 truncate text-xs text-ink-mute">
               {formatParticipantLabel(applicant.applicant)} · {formatCompactIdentifier(applicant.applicantCode)}
             </p>
           </div>
-          <Button aria-label="모달 닫기" size="icon" type="button" variant="ghost" onClick={onClose}>
+          <Button aria-label="Close modal" size="icon" type="button" variant="ghost" onClick={onClose}>
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -1151,28 +1151,28 @@ function SubmissionHistoryModal({
               <Badge variant="secondary">Walrus Blob</Badge>
             </div>
             <p className="mt-3 text-sm leading-6 text-ink-secondary">
-              참가자가 user-app에서 Walrus에 올린 암호화된 헬스케어 데이터셋을 내려받습니다.
+              Download encrypted healthcare datasets uploaded to Walrus from the user app.
             </p>
             {downloadError ? <p className="mt-2 text-sm text-destructive">{downloadError}</p> : null}
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
-            <MiniStat label="총 제출량" value={applicant.dataSent} />
-            <MiniStat label="최근 제출" value={applicant.lastSync} />
-            <MiniStat label="제출 건수" value={`${submissions.length}건`} />
+            <MiniStat label="Total Volume" value={applicant.dataSent} />
+            <MiniStat label="Latest Submission" value={applicant.lastSync} />
+            <MiniStat label="Submission Count" value={`${submissions.length}`} />
           </div>
           {submissions.length === 0 ? (
             <div className="rounded-md border border-border bg-white px-4 py-8 text-center text-sm text-ink-mute">
-              아직 제출된 기록이 없습니다.
+              No submissions yet.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[620px] text-left text-sm">
                 <thead className="text-xs text-ink-mute">
                   <tr className="border-b border-border">
-                    <th className="py-3 pr-5 font-medium">제출일</th>
-                    <th className="py-3 pr-5 font-medium">대상 기간</th>
-                    <th className="py-3 pr-5 font-medium">용량</th>
-                    <th className="py-3 text-right font-medium">다운로드</th>
+                    <th className="py-3 pr-5 font-medium">Submitted At</th>
+                    <th className="py-3 pr-5 font-medium">Period</th>
+                    <th className="py-3 pr-5 font-medium">Size</th>
+                    <th className="py-3 text-right font-medium">Download</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1199,7 +1199,7 @@ function SubmissionHistoryModal({
                             }
                           >
                             <Download className="mr-2 h-4 w-4" />
-                            {downloadingKey === downloadKey ? '다운로드 중' : '다운로드'}
+                            {downloadingKey === downloadKey ? 'Downloading' : 'Download'}
                           </Button>
                         </td>
                       </tr>
@@ -1221,8 +1221,8 @@ function ProjectDataSetCard({ selectedProject }: { selectedProject: Project }) {
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <CardTitle>데이터 세트</CardTitle>
-            <CardDescription>수집 범위와 접근 정책</CardDescription>
+            <CardTitle>Dataset</CardTitle>
+            <CardDescription>Collection scope and access policy</CardDescription>
           </div>
           <DatabaseZap className="h-5 w-5 text-primary" />
         </div>
@@ -1232,19 +1232,19 @@ function ProjectDataSetCard({ selectedProject }: { selectedProject: Project }) {
           <div className="rounded-md border border-border bg-white px-3 py-2">
             <p className="text-xs text-ink-mute">Sui DataRequest</p>
             <p className="mt-1 font-mono text-xs text-ink">
-              {selectedProject.suiDataRequestId ? formatCompactIdentifier(selectedProject.suiDataRequestId) : '생성 전'}
+              {selectedProject.suiDataRequestId ? formatCompactIdentifier(selectedProject.suiDataRequestId) : 'Not created'}
             </p>
           </div>
           <div className="rounded-md border border-border bg-white px-3 py-2">
-            <p className="text-xs text-ink-mute">기관 Slush 주소</p>
+            <p className="text-xs text-ink-mute">Institution Slush Address</p>
             <p className="mt-1 font-mono text-xs text-ink">
-              {selectedProject.researcherSuiAddress ? formatCompactIdentifier(selectedProject.researcherSuiAddress) : '연결 전'}
+              {selectedProject.researcherSuiAddress ? formatCompactIdentifier(selectedProject.researcherSuiAddress) : 'Not connected'}
             </p>
           </div>
         </div>
         {selectedProject.dataScope.length === 0 ? (
           <div className="rounded-md border border-border bg-canvas-soft px-4 py-8 text-center text-sm text-ink-mute">
-            등록된 데이터 범위가 없습니다.
+            No data scope registered.
           </div>
         ) : (
           selectedProject.dataScope.map((scope) => (
@@ -1308,7 +1308,7 @@ function DataManagementView({
         objectId: submission.walrusDatasetObjectId,
       })
     } catch (error) {
-      setDownloadError(error instanceof Error ? error.message : 'Walrus 다운로드에 실패했습니다.')
+      setDownloadError(error instanceof Error ? error.message : 'Walrus download failed.')
     } finally {
       setDownloadingKey(null)
     }
@@ -1333,7 +1333,7 @@ function DataManagementView({
         objectId: artifact.blobObjectId,
       })
     } catch (error) {
-      setDownloadError(error instanceof Error ? error.message : 'Walrus Security Agent record 다운로드에 실패했습니다.')
+      setDownloadError(error instanceof Error ? error.message : 'Walrus Security Agent record download failed.')
     } finally {
       setDownloadingKey(null)
     }
@@ -1342,11 +1342,11 @@ function DataManagementView({
   return (
     <div className="min-w-0 space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <MiniStat label="제출 데이터" value={`${submissionRows.length}건`} />
-        <MiniStat label="누적 제출량" value={formatBytes(totalHealthcareBytes)} />
-        <MiniStat label="Security Trail" value={`${agentMemoryRows.length}개`} />
-        <MiniStat label="Security Memory" value={selectedProject.securityMemoryBlobId ? 'Active' : '없음'} />
-        <MiniStat label="Workflow Manifest" value={`${submissionRows.filter((row) => row.submission.agentMemoryManifestBlobId).length}개`} />
+        <MiniStat label="Submitted Data" value={`${submissionRows.length}`} />
+        <MiniStat label="Total Volume" value={formatBytes(totalHealthcareBytes)} />
+        <MiniStat label="Security Trail" value={`${agentMemoryRows.length}`} />
+        <MiniStat label="Security Memory" value={selectedProject.securityMemoryBlobId ? 'Active' : 'None'} />
+        <MiniStat label="Workflow Manifest" value={`${submissionRows.filter((row) => row.submission.agentMemoryManifestBlobId).length}`} />
       </div>
 
       <Card>
@@ -1354,7 +1354,7 @@ function DataManagementView({
           <div className="flex items-center justify-between gap-3">
             <div>
               <CardTitle>Security Agent Audit Trail</CardTitle>
-              <CardDescription>Walrus policy memory를 재사용한 platform Security Agent 검증 기록을 확인합니다</CardDescription>
+              <CardDescription>Inspect platform Security Agent records that reuse Walrus policy memory</CardDescription>
             </div>
             <Layers3 className="h-5 w-5 text-primary" />
           </div>
@@ -1364,18 +1364,18 @@ function DataManagementView({
 
           {agentMemoryRows.length === 0 ? (
             <div className="rounded-md border border-border bg-white px-4 py-8 text-center text-sm text-ink-mute">
-              아직 Walrus Security Agent audit trail이 없습니다.
+              No Walrus Security Agent audit trail yet.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[880px] text-left text-sm">
                 <thead className="text-xs text-ink-mute">
                   <tr className="border-b border-border">
-                    <th className="py-3 pr-5 font-medium">참여자</th>
+                    <th className="py-3 pr-5 font-medium">Participants</th>
                     <th className="py-3 pr-5 font-medium">Audit artifact</th>
                     <th className="py-3 pr-5 font-medium">Walrus Blob</th>
                     <th className="py-3 pr-5 font-medium">Hash</th>
-                    <th className="py-3 pr-5 font-medium">연결 제출</th>
+                    <th className="py-3 pr-5 font-medium">Linked Submission</th>
                     <th className="py-3 text-right font-medium">Record</th>
                   </tr>
                 </thead>
@@ -1413,7 +1413,7 @@ function DataManagementView({
                             }
                           >
                             <Download className="mr-2 h-4 w-4" />
-                            {downloadingKey === downloadKey ? '받는 중' : '다운로드'}
+                            {downloadingKey === downloadKey ? 'Downloading' : 'Download'}
                           </Button>
                         </td>
                       </tr>
@@ -1430,8 +1430,8 @@ function DataManagementView({
         <CardHeader>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <CardTitle>데이터 다운로드</CardTitle>
-              <CardDescription>참가자가 user-app에서 Walrus에 올린 암호화된 헬스케어 데이터셋을 내려받습니다</CardDescription>
+              <CardTitle>Data Download</CardTitle>
+              <CardDescription>Download encrypted healthcare datasets uploaded to Walrus from the user app</CardDescription>
             </div>
             <DatabaseZap className="h-5 w-5 text-primary" />
           </div>
@@ -1441,18 +1441,18 @@ function DataManagementView({
 
           {submissionRows.length === 0 ? (
             <div className="rounded-md border border-border bg-white px-4 py-10 text-center text-sm text-ink-mute">
-              아직 다운로드할 헬스케어 데이터가 없습니다.
+              No healthcare data available for download yet.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="text-xs text-ink-mute">
                   <tr className="border-b border-border">
-                    <th className="py-3 pr-5 font-medium">참여자</th>
-                    <th className="py-3 pr-5 font-medium">제출일</th>
-                    <th className="py-3 pr-5 font-medium">대상 기간</th>
-                    <th className="py-3 pr-5 font-medium">용량</th>
-                    <th className="py-3 text-right font-medium">다운로드</th>
+                    <th className="py-3 pr-5 font-medium">Participants</th>
+                    <th className="py-3 pr-5 font-medium">Submitted At</th>
+                    <th className="py-3 pr-5 font-medium">Period</th>
+                    <th className="py-3 pr-5 font-medium">Size</th>
+                    <th className="py-3 text-right font-medium">Download</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1485,7 +1485,7 @@ function DataManagementView({
                             }
                           >
                             <Download className="mr-2 h-4 w-4" />
-                            {downloadingKey === downloadKey ? '다운로드 중' : '다운로드'}
+                            {downloadingKey === downloadKey ? 'Downloading' : 'Download'}
                           </Button>
                         </td>
                       </tr>
@@ -1520,8 +1520,8 @@ function SettlementCard({
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <CardTitle>보상/정산</CardTitle>
-            <CardDescription>RewardEscrow 지급 현황</CardDescription>
+            <CardTitle>Rewards / Settlement</CardTitle>
+            <CardDescription>RewardEscrow payment status</CardDescription>
           </div>
           <Wallet className="h-5 w-5 text-primary" />
         </div>
@@ -1529,25 +1529,25 @@ function SettlementCard({
       <CardContent className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-md bg-brand-dark p-4 text-white">
-            <p className="text-xs text-white/60">예치 보상</p>
+            <p className="text-xs text-white/60">Escrowed Reward</p>
             <p className="tabular mt-2 text-2xl font-light">{selectedProject.rewardPoolLabel}</p>
           </div>
-          <MiniStat label="정산 완료" value={`${settledCount}건`} />
-          <MiniStat label="정산 대기" value={`${pendingCount}건`} />
+          <MiniStat label="Settled" value={`${settledCount}`} />
+          <MiniStat label="Pending Settlement" value={`${pendingCount}`} />
         </div>
         {settlementRecords.length === 0 ? (
           <div className="rounded-md border border-border bg-canvas-soft px-4 py-8 text-center text-sm text-ink-mute">
-            표시할 정산 내역이 없습니다.
+            No settlement records to display.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="text-xs text-ink-mute">
                 <tr className="border-b border-border">
-                  <th className="py-3 pr-5 font-medium">대상자</th>
-                  <th className="py-3 pr-5 font-medium">보상액</th>
-                  <th className="py-3 pr-5 font-medium">정산 상태</th>
-                  <th className="py-3 text-right font-medium">액션</th>
+                  <th className="py-3 pr-5 font-medium">Person</th>
+                  <th className="py-3 pr-5 font-medium">Reward Amount</th>
+                  <th className="py-3 pr-5 font-medium">Settlement Status</th>
+                  <th className="py-3 text-right font-medium">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -1563,7 +1563,7 @@ function SettlementCard({
                       </td>
                       <td className="tabular py-3 pr-5 font-medium text-ink">{row.amountLabel}</td>
                       <td className="py-3 pr-5">
-                        <Badge variant={isSettled ? 'secondary' : 'outline'}>{isSettled ? '정산 완료' : '정산 대기'}</Badge>
+                        <Badge variant={isSettled ? 'secondary' : 'outline'}>{isSettled ? 'Settled' : 'Pending Settlement'}</Badge>
                       </td>
                       <td className="py-3 text-right">
                         {isSettled && transactionHref ? (
@@ -1573,7 +1573,7 @@ function SettlementCard({
                             rel="noreferrer"
                             target="_blank"
                           >
-                            트랜잭션 확인
+                            View Transaction
                           </a>
                         ) : (
                           <Button
@@ -1583,7 +1583,7 @@ function SettlementCard({
                             disabled={pendingSettlementId === row.id}
                             onClick={() => onSettleReward(row.id)}
                           >
-                            {pendingSettlementId === row.id ? '정산 중' : '정산하기'}
+                            {pendingSettlementId === row.id ? 'Settling' : 'Settle'}
                           </Button>
                         )}
                       </td>
@@ -1666,14 +1666,14 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 function StatusBadge({ status }: { status: ApplicantStatus }) {
   if (status === 'approved') {
-    return <Badge variant="secondary">참여 중</Badge>
+    return <Badge variant="secondary">Participating</Badge>
   }
 
   if (status === 'rejected') {
-    return <Badge variant="outline">거절</Badge>
+    return <Badge variant="outline">Reject</Badge>
   }
 
-  return <Badge variant="outline">신청</Badge>
+  return <Badge variant="outline">Applied</Badge>
 }
 
 function BasicInfoCard() {
@@ -1682,25 +1682,25 @@ function BasicInfoCard() {
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <CardTitle>기본 정보</CardTitle>
-            <CardDescription>연구 카드와 사용자 앱 모집 목록에 표시되는 값</CardDescription>
+            <CardTitle>Basic Information</CardTitle>
+            <CardDescription>Values shown on study cards and the user app recruitment list</CardDescription>
           </div>
           <FileText className="h-5 w-5 text-primary" />
         </div>
       </CardHeader>
       <CardContent>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field className="md:col-span-2" label="연구명">
-            <input className={inputClassName} name="title" defaultValue="Apple Health 활동/운동 리워드 검증 데이터" required />
+          <Field className="md:col-span-2" label="Study Name">
+            <input className={inputClassName} name="title" defaultValue="Apple Health Activity Reward Validation Data" required />
           </Field>
-          <Field className="md:col-span-2" label="연구 목적">
-            <input className={inputClassName} name="purpose" defaultValue="예방 리워드 산정" />
+          <Field className="md:col-span-2" label="Study Purpose">
+            <input className={inputClassName} name="purpose" defaultValue="Preventive reward calculation" />
           </Field>
-          <Field className="md:col-span-2" label="연구 설명">
+          <Field className="md:col-span-2" label="Study Description">
             <textarea
               className={`${inputClassName} min-h-28 resize-none leading-6`}
               name="description"
-              defaultValue="걸음 수, 이동 거리, 운동 시간, 활동 에너지, VO2 max를 범주화해 리워드 산정 정확도를 검증합니다."
+              defaultValue="Categorize steps, distance, exercise minutes, active energy, and VO2 max to validate reward calculation accuracy."
             />
           </Field>
         </div>
@@ -1723,28 +1723,28 @@ function EligibilityCard({
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <CardTitle>참여 조건</CardTitle>
-            <CardDescription>모집 대상, 보상, 데이터 접근 기간</CardDescription>
+            <CardTitle>Participation Conditions</CardTitle>
+            <CardDescription>Recruitment target, reward, and data access period</CardDescription>
           </div>
           <SlidersHorizontal className="h-5 w-5 text-primary" />
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="grid gap-4 md:grid-cols-3">
-          <Field label="목표 인원">
+          <Field label="Target Participants">
             <input className={inputClassName} name="targetParticipants" defaultValue="420" inputMode="numeric" />
           </Field>
-          <Field label="1인 보상(USDC)">
+          <Field label="Reward per Participant (USDC)">
             <input className={inputClassName} name="rewardAmountPerParticipant" defaultValue="19" inputMode="decimal" />
             <input type="hidden" name="rewardCurrency" value="USDC" />
           </Field>
-          <Field label="접근 기간">
-            <input className={inputClassName} name="accessPeriodDays" defaultValue="60일" inputMode="numeric" />
+          <Field label="Access Period">
+            <input className={inputClassName} name="accessPeriodDays" defaultValue="60" inputMode="numeric" />
           </Field>
         </div>
 
         <div>
-          <p className="text-sm font-medium text-ink">연령대</p>
+          <p className="text-sm font-medium text-ink">Age Range</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {ageRanges.map((range, index) => (
               <button
@@ -1761,7 +1761,7 @@ function EligibilityCard({
         </div>
 
         <div>
-          <p className="text-sm font-medium text-ink">요청 데이터</p>
+          <p className="text-sm font-medium text-ink">Requested Data</p>
           <div className="mt-3 space-y-3">
             {dataCategoryGroups.map((group) => (
               <div key={group.label} className="rounded-md border border-border bg-white p-3">
@@ -1804,9 +1804,9 @@ function EligibilityCard({
             ))}
           </div>
           {selectedDataCategories.length === 0 ? (
-            <p className="mt-2 text-xs font-medium text-destructive">최소 1개 이상의 요청 데이터를 선택해야 합니다.</p>
+            <p className="mt-2 text-xs font-medium text-destructive">Select at least one requested data category.</p>
           ) : (
-            <p className="mt-2 text-xs text-ink-mute">선택됨: {selectedDataCategories.join(', ')}</p>
+            <p className="mt-2 text-xs text-ink-mute">Selected: {selectedDataCategories.join(', ')}</p>
           )}
         </div>
       </CardContent>
@@ -1822,8 +1822,8 @@ function DataSchemaCard({ selectedDataCategories }: { selectedDataCategories: st
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div>
-            <CardTitle>데이터 스키마</CardTitle>
-            <CardDescription>사용자 앱에서 제공되는 필드와 기관 접근 정책</CardDescription>
+            <CardTitle>Data Schema</CardTitle>
+            <CardDescription>Fields provided by the user app and institution access policy</CardDescription>
           </div>
           <Layers3 className="h-5 w-5 text-primary" />
         </div>
@@ -1833,10 +1833,10 @@ function DataSchemaCard({ selectedDataCategories }: { selectedDataCategories: st
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="text-xs text-ink-mute">
               <tr className="border-b border-border">
-                <th className="py-3 font-medium">필드</th>
-                <th className="py-3 font-medium">소스</th>
-                <th className="py-3 font-medium">정책</th>
-                <th className="py-3 text-right font-medium">상태</th>
+                <th className="py-3 font-medium">Field</th>
+                <th className="py-3 font-medium">Source</th>
+                <th className="py-3 font-medium">Policy</th>
+                <th className="py-3 text-right font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -1846,7 +1846,7 @@ function DataSchemaCard({ selectedDataCategories }: { selectedDataCategories: st
                   <td className="py-3 pr-5 text-ink-secondary">{row.source}</td>
                   <td className="py-3 pr-5 text-ink-secondary">{row.policy}</td>
                   <td className="py-3 text-right">
-                    <Badge variant={row.enabled ? 'secondary' : 'outline'}>{row.enabled ? '포함' : '제외'}</Badge>
+                    <Badge variant={row.enabled ? 'secondary' : 'outline'}>{row.enabled ? 'Included' : 'Excluded'}</Badge>
                   </td>
                 </tr>
               ))}
@@ -1864,13 +1864,13 @@ function buildSelectedSchemaRows(selectedDataCategories: string[]) {
     const field = category
       .trim()
       .toLowerCase()
-      .replace(/[^a-z0-9가-힣]+/g, '_')
+      .replace(/[^a-z0-9]+/g, '_')
       .replace(/^_+|_+$/g, '')
 
     return {
       field,
       source: option?.source ?? 'User Health Data',
-      policy: `${category} 원본값 제거 후 연구용 범주만 허용`,
+      policy: `${category} raw values are removed; only research-grade bands are allowed`,
       enabled: true,
     }
   })

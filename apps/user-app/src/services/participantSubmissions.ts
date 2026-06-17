@@ -231,28 +231,28 @@ const fullnodeUrls: Record<SuiNetwork, string> = {
   testnet: 'https://fullnode.testnet.sui.io:443',
 }
 const conditionLabels: Record<string, string> = {
-  active_energy: '활동으로 쓴 에너지',
-  blood_glucose: '혈당',
-  blood_pressure: '혈압',
-  distance_walking_running: '걷거나 뛴 거리',
-  exercise_minutes: '운동한 시간',
-  glucose_range: '혈당 범위',
-  heart_rate: '심박수',
-  hrv_sdnn: '심박 변화 정도',
-  insulin_delivery: '인슐린 투여 기록',
-  metabolic_pattern: '대사 변화 패턴',
-  mindful_minutes: '마음챙김 시간',
-  oxygen_saturation: '혈중 산소 수준',
-  respiratory_rate: '호흡수',
-  resting_heart_rate: '쉬고 있을 때 심박수',
-  sleep_analysis: '수면 기록',
-  sleep_consistency: '수면 규칙성',
-  sleep_duration: '총 수면 시간',
-  sleep_stage_band: '수면 단계',
-  stand_time: '일어서 있던 시간',
-  step_count: '걸음 수',
-  vo2_max: '심폐 체력',
-  workout_summary: '운동 기록 요약',
+  active_energy: 'Active energy',
+  blood_glucose: 'Glucose',
+  blood_pressure: 'Blood pressure',
+  distance_walking_running: 'Walking/running distance',
+  exercise_minutes: 'Exercise minutes',
+  glucose_range: 'Glucose range',
+  heart_rate: 'Heart rate',
+  hrv_sdnn: 'Heart rate variability',
+  insulin_delivery: 'Insulin delivery records',
+  metabolic_pattern: 'Metabolic pattern',
+  mindful_minutes: 'Mindfulness minutes',
+  oxygen_saturation: 'Blood oxygen level',
+  respiratory_rate: 'Respiratory rate',
+  resting_heart_rate: 'Resting heart rate',
+  sleep_analysis: 'Sleep record',
+  sleep_consistency: 'Sleep consistency',
+  sleep_duration: 'Total sleep duration',
+  sleep_stage_band: 'Sleep stages',
+  stand_time: 'Stand time',
+  step_count: 'Step count',
+  vo2_max: 'Cardio fitness',
+  workout_summary: 'Workout summary',
 }
 const directIdentifierKeys = new Set([
   'address',
@@ -277,12 +277,12 @@ const timestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
 
 export async function submitParticipantData({ loginId, onProgress, request }: SubmitParticipantDataInput): Promise<SubmitParticipantDataResult> {
   if (!isSupabaseConfigured) {
-    throw new Error('Supabase 설정이 필요합니다.')
+    throw new Error('Supabase configuration is required.')
   }
 
   reportSubmissionProgress(onProgress, {
-    detail: '연구 요청 범위와 제출 기간을 계산하고 있습니다.',
-    label: '제출 준비중',
+    detail: 'Calculating the study request scope and submission period.',
+    label: 'Preparing submission',
     progress: 4,
     stage: 'preparing',
   })
@@ -295,15 +295,15 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
   const category = getSubmissionCategory(request)
   const participantLabel = getParticipantLabel(loginId)
   reportSubmissionProgress(onProgress, {
-    detail: '기관이 Walrus에 저장한 policy_pack을 불러오고 hash를 확인합니다.',
-    label: 'Policy Pack 확인중',
+    detail: 'Loading the institution policy_pack from Walrus and verifying its hash.',
+    label: 'Checking Policy Pack',
     progress: 12,
     stage: 'policy-loading',
   })
   const policyPack = await fetchPolicyPackSnapshot(request)
   reportSubmissionProgress(onProgress, {
-    detail: '이 연구의 이전 Security Memory가 있으면 먼저 불러옵니다.',
-    label: 'Security Memory 조회중',
+    detail: 'Loading prior Security Memory for this study when available.',
+    label: 'Loading Security Memory',
     progress: 20,
     stage: 'security-memory-loading',
   })
@@ -311,8 +311,8 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
   const policyHash = policyPack?.hash ?? request.policyPackHash ?? null
   const policyVersion = policyPack?.version ?? request.policyPackVersion ?? null
   reportSubmissionProgress(onProgress, {
-    detail: '로그인 ID와 원본 건강 데이터를 연구용 pseudonymized payload로 분리합니다.',
-    label: '로컬 가명처리중',
+    detail: 'Separating the login ID and raw health data into a study-grade pseudonymized payload.',
+    label: 'Local pseudonymization',
     progress: 30,
     stage: 'pseudonymizing',
   })
@@ -339,8 +339,8 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
   let safetyEdits: PrivacySafetyEdit[] = []
   const securityMemoryPatches: SecurityMemoryPatch[] = []
   reportSubmissionProgress(onProgress, {
-    detail: 'Supabase Edge Function의 Privacy Agent가 payload, policy, Security Memory를 함께 검증합니다.',
-    label: 'Privacy Agent 1차 검증중',
+    detail: 'The Privacy Agent in Supabase Edge Functions verifies payload, policy, and Security Memory together.',
+    label: 'Privacy Agent first pass',
     progress: 42,
     stage: 'verifying',
   })
@@ -361,8 +361,8 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
 
   if (!privacyVerification.verified) {
     reportSubmissionProgress(onProgress, {
-      detail: `Agent가 ${privacyVerification.findings.length}개 위험 신호를 찾아 payload를 더 넓은 범주로 수정합니다.`,
-      label: '위험 신호 보정중',
+      detail: `Privacy Agent found ${privacyVerification.findings.length} risk signals and generalized the payload into broader categories.`,
+      label: 'Hardening risk signals',
       progress: 54,
       stage: 'hardening',
     })
@@ -371,8 +371,8 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
     serializedPayload = stableStringify(payload)
     pseudonymizedPayloadHash = await sha256Hex(serializedPayload)
     reportSubmissionProgress(onProgress, {
-      detail: '수정된 payload가 같은 Privacy Agent 검증을 통과하는지 다시 확인합니다.',
-      label: 'Privacy Agent 재검증중',
+      detail: 'Rechecking whether the hardened payload passes the same Privacy Agent verification.',
+      label: 'Privacy Agent recheck',
       progress: 63,
       stage: 'reverifying',
     })
@@ -392,20 +392,20 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
     verificationAttempts.push(buildPrivacyVerificationAttempt(privacyVerification, 2))
   } else {
     reportSubmissionProgress(onProgress, {
-      detail: '추가 보정 없이 policy와 Security Memory 기준을 통과했습니다.',
-      label: 'Privacy Agent 검증 통과',
+      detail: 'Passed policy and Security Memory criteria without additional hardening.',
+      label: 'Privacy Agent passed',
       progress: 63,
       stage: 'verified',
     })
   }
 
   if (!privacyVerification.verified || privacyVerification.payloadHash !== pseudonymizedPayloadHash) {
-    throw new Error(privacyVerification.summary || '가명처리 payload 검증을 통과하지 못했습니다.')
+    throw new Error(privacyVerification.summary || 'Pseudonymized payload did not pass verification.')
   }
 
   reportSubmissionProgress(onProgress, {
-    detail: '가명처리 계획을 Walrus에 agent memory artifact로 저장합니다.',
-    label: 'Agent Memory 저장중',
+    detail: 'Storing the pseudonymization plan on Walrus as an agent memory artifact.',
+    label: 'Storing Agent Memory',
     progress: 69,
     stage: 'agent-memory-uploading',
   })
@@ -424,8 +424,8 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
     loginId,
   })
   reportSubmissionProgress(onProgress, {
-    detail: 'Privacy Agent 검증 receipt를 Walrus에 남겨 다음 검증에서 추적할 수 있게 합니다.',
-    label: '검증 Receipt 저장중',
+    detail: 'Writing the Privacy Agent verification receipt to Walrus for future traceability.',
+    label: 'Storing Verification Receipt',
     progress: 74,
     stage: 'agent-memory-uploading',
   })
@@ -448,8 +448,8 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
   })
   if (securityMemoryPatches.length > 0) {
     reportSubmissionProgress(onProgress, {
-      detail: '이번에 발견한 위험 패턴을 다음 제출이 재사용할 Security Memory로 갱신합니다.',
-      label: 'Security Memory 갱신중',
+      detail: 'Updating Security Memory so future submissions can reuse newly discovered risk patterns.',
+      label: 'Updating Security Memory',
       progress: 78,
       stage: 'security-memory-updating',
     })
@@ -469,8 +469,8 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
       })
     : null
   reportSubmissionProgress(onProgress, {
-    detail: '검증이 끝난 payload를 Seal SDK 기반 encrypted dataset으로 변환합니다.',
-    label: '데이터셋 암호화중',
+    detail: 'Converting the verified payload into a Seal SDK-based encrypted dataset.',
+    label: 'Encrypting dataset',
     progress: 84,
     stage: 'encrypting',
   })
@@ -482,8 +482,8 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
   })
   const encryptedDatasetHash = await sha256Hex(encryptedDataset.encryptedPayload)
   reportSubmissionProgress(onProgress, {
-    detail: '암호화된 헬스케어 데이터셋을 Walrus publisher로 업로드합니다.',
-    label: 'Walrus 업로드중',
+    detail: 'Uploading the encrypted healthcare dataset to the Walrus publisher.',
+    label: 'Uploading to Walrus',
     progress: 89,
     stage: 'walrus-uploading',
   })
@@ -492,8 +492,8 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
     payload: encryptedDataset.encryptedPayload,
   })
   reportSubmissionProgress(onProgress, {
-    detail: 'Walrus object owner와 transaction digest를 fullnode에서 확인합니다.',
-    label: 'Walrus Tx 확인중',
+    detail: 'Verifying the Walrus object owner and transaction digest on the fullnode.',
+    label: 'Verifying Walrus Tx',
     progress: 93,
     stage: 'tx-verifying',
   })
@@ -503,8 +503,8 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
   })
   const walrusTxDigest = walrusUpload.txDigest ?? walrusTxVerification.previousTransaction
   reportSubmissionProgress(onProgress, {
-    detail: '전체 workflow manifest를 Walrus memory로 저장합니다.',
-    label: 'Workflow Memory 저장중',
+    detail: 'Storing the full workflow manifest as Walrus memory.',
+    label: 'Storing Workflow Memory',
     progress: 96,
     stage: 'agent-memory-uploading',
   })
@@ -554,8 +554,8 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
   }
 
   reportSubmissionProgress(onProgress, {
-    detail: 'platform 서버에 제출 record와 Walrus blob 참조를 등록합니다.',
-    label: '제출 등록중',
+    detail: 'Registering the submission record and Walrus blob reference with the platform server.',
+    label: 'Registering submission',
     progress: 98,
     stage: 'registering',
   })
@@ -599,8 +599,8 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
   }
 
   reportSubmissionProgress(onProgress, {
-    detail: '기관 대시보드에서 복호화 다운로드할 수 있는 제출 데이터가 준비되었습니다.',
-    label: '제출 완료',
+    detail: 'Submission data is ready for decrypted download in the institution dashboard.',
+    label: 'Submission complete',
     progress: 100,
     stage: 'complete',
   })
@@ -682,7 +682,7 @@ function buildPrivacySafetyEdits(findings: PrivacyVerificationFinding[]): Privac
   if (findingCodes.includes('direct_identifier_key_present') || findingCodes.includes('policy_forbidden_field_present')) {
     edits.push({
       action: 'remove_direct_identifier_fields',
-      reason: '직접 식별자와 Walrus policy memory가 금지한 key를 payload에서 제거합니다.',
+      reason: 'Remove direct identifiers and keys forbidden by Walrus policy memory from the payload.',
       sourceFindingCodes: findingCodes.filter((code) => code === 'direct_identifier_key_present' || code === 'policy_forbidden_field_present'),
     })
   }
@@ -690,7 +690,7 @@ function buildPrivacySafetyEdits(findings: PrivacyVerificationFinding[]): Privac
   if (findingCodes.includes('exact_date_present') || findingCodes.includes('exact_timestamp_present')) {
     edits.push({
       action: 'coarsen_time',
-      reason: '정확한 날짜와 타임스탬프를 월 단위 값으로 일반화합니다.',
+      reason: 'Generalize exact dates and timestamps into month-level values.',
       sourceFindingCodes: findingCodes.filter((code) => code === 'exact_date_present' || code === 'exact_timestamp_present'),
     })
   }
@@ -702,7 +702,7 @@ function buildPrivacySafetyEdits(findings: PrivacyVerificationFinding[]): Privac
   if (identifierValueCodes.length > 0) {
     edits.push({
       action: 'replace_identifier_values',
-      reason: '식별 가능한 문자열 값을 제거 표시로 대체합니다.',
+      reason: 'Replace identifiable string values with removal markers.',
       sourceFindingCodes: identifierValueCodes,
     })
   }
@@ -714,7 +714,7 @@ function buildPrivacySafetyEdits(findings: PrivacyVerificationFinding[]): Privac
   if (quasiIdentifierCodes.length > 0) {
     edits.push({
       action: 'generalize_quasi_identifiers',
-      reason: '작은 cohort에서 재식별될 수 있는 준식별자 조합을 더 넓은 범주로 일반화합니다.',
+      reason: 'Generalize quasi-identifier combinations that could re-identify users in small cohorts.',
       sourceFindingCodes: quasiIdentifierCodes,
     })
   }
@@ -722,7 +722,7 @@ function buildPrivacySafetyEdits(findings: PrivacyVerificationFinding[]): Privac
   if (edits.length === 0 && findings.length > 0) {
     edits.push({
       action: 'remove_direct_identifier_fields',
-      reason: 'Security Agent finding이 남아 있어 보수적으로 식별자 제거 규칙을 재적용합니다.',
+      reason: 'Reapply identifier removal rules conservatively because Security Agent findings remain.',
       sourceFindingCodes: findingCodes,
     })
   }
@@ -768,7 +768,7 @@ function buildPseudonymizationPlanMemory({
       longTermPurpose: 'local pseudonymization rules derived from the public Walrus policy pack',
       storage: 'walrus',
     },
-    summary: '기관이 공개한 policy_pack을 기준으로 user-app이 로컬에서 적용한 가명처리 규칙을 기록합니다.',
+    summary: 'Records the local pseudonymization rules applied by the user app from the public institution policy_pack.',
     project: {
       allowedUse: request.allowedUse,
       dataScope: request.requiredConditionTags,
@@ -790,18 +790,18 @@ function buildPseudonymizationPlanMemory({
         {
           action: 'remove',
           fields: [...directIdentifierKeys].sort(),
-          reason: '직접 식별자와 지갑/연락처 패턴을 Walrus 저장 전에 제거합니다.',
+          reason: 'Remove direct identifiers and wallet/contact patterns before Walrus storage.',
         },
         {
           action: 'coarsen_time',
           fields: ['createdAt', 'periodStart', 'periodEnd', 'recordedAt'],
           granularity: 'month',
-          reason: '장기 agent memory에 정밀 타임스탬프가 남지 않도록 월 단위로 축소합니다.',
+          reason: 'Reduce time to month-level granularity so precise timestamps do not persist in long-term agent memory.',
         },
         {
           action: 'scope_pseudonym',
           fields: ['participant.pseudonymId'],
-          reason: '유저 식별자는 연구와 policy hash에 묶인 pseudonym으로만 재사용합니다.',
+          reason: 'Reuse user identity only as a pseudonym bound to the study and policy hash.',
         },
       ],
     },
@@ -950,7 +950,7 @@ function buildSecurityMemoryArtifact({
     },
     knownRiskPatterns,
     patches: securityMemoryPatches,
-    summary: 'Security Agent가 과거 제출에서 발견한 재식별 위험 signal 조합과 권장 일반화 규칙을 저장한 Walrus memory입니다.',
+    summary: 'Walrus memory storing re-identification risk signal combinations and recommended generalization rules found in past submissions.',
   }
 }
 
@@ -1092,7 +1092,7 @@ function buildWorkflowManifestMemory({
       longTermPurpose: 'portable workflow record shared by platform Security Agent and institution download flow',
       storage: 'walrus',
     },
-    summary: 'Public policy memory, user-app local pseudonymization, platform Security Agent, Institution Download flow가 공유하는 durable workflow record입니다.',
+    summary: 'Durable workflow record shared by public policy memory, user-app local pseudonymization, platform Security Agent, and institution download flow.',
     agentWorkflow: [
       'institution_published_public_policy',
       'user_app_loaded_public_policy_pack',
@@ -1209,7 +1209,7 @@ async function verifyPseudonymizedPayload({
   const verification = data as PrivacyVerificationResult
 
   if (typeof verification?.verified !== 'boolean' || !verification.payloadHash || !verification.receiptHash) {
-    throw new Error('Agent 가명처리 검증 응답이 올바르지 않습니다.')
+    throw new Error('Agent pseudonymization verification response is invalid.')
   }
 
   return verification
@@ -1224,13 +1224,13 @@ async function fetchPolicyPackSnapshot(request: ResearchRequest): Promise<Policy
   const responseText = await response.text()
 
   if (!response.ok) {
-    throw new Error(`policy_pack을 Walrus에서 가져오지 못했습니다. ${responseText || response.statusText}`)
+    throw new Error(`Could not fetch policy_pack from Walrus. ${responseText || response.statusText}`)
   }
 
   const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, responseText)
 
   if (request.policyPackHash && request.policyPackHash !== hash) {
-    throw new Error('policy_pack hash가 연구 생성 시 저장된 값과 일치하지 않습니다.')
+    throw new Error('policy_pack hash does not match the value stored when the study was created.')
   }
 
   const payload = parseJson(responseText)
@@ -1254,13 +1254,13 @@ async function fetchSecurityMemorySnapshot(request: ResearchRequest): Promise<Se
   const responseText = await response.text()
 
   if (!response.ok) {
-    throw new Error(`Security Memory를 Walrus에서 가져오지 못했습니다. ${responseText || response.statusText}`)
+    throw new Error(`Could not fetch Security Memory from Walrus. ${responseText || response.statusText}`)
   }
 
   const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, responseText)
 
   if (request.securityMemoryHash && request.securityMemoryHash !== hash) {
-    throw new Error('Security Memory hash가 연구에 저장된 값과 일치하지 않습니다.')
+    throw new Error('Security Memory hash does not match the value stored on the study.')
   }
 
   const payload = parseJson(responseText)
@@ -1630,7 +1630,7 @@ async function uploadToWalrus({ loginId, payload }: { loginId: string; payload: 
   const responseBody = parseJson(responseText)
 
   if (!response.ok) {
-    throw new Error(`Walrus 업로드에 실패했습니다. ${responseText || response.statusText}`)
+    throw new Error(`Walrus upload failed. ${responseText || response.statusText}`)
   }
 
   return parseWalrusUploadResponse(responseBody)
@@ -1664,7 +1664,7 @@ function parseWalrusUploadResponse(responseBody: unknown): WalrusUploadResult {
   const txDigest = readString(event?.txDigest) ?? readString(newlyCreated?.txDigest) ?? readString(alreadyCertified?.txDigest)
 
   if (!blobId) {
-    throw new Error('Walrus 업로드 응답에서 blob ID를 찾을 수 없습니다.')
+    throw new Error('Could not find the blob ID in the Walrus upload response.')
   }
 
   return {
@@ -1683,7 +1683,7 @@ async function verifyWalrusUploadTx({
   upload: WalrusUploadResult
 }): Promise<WalrusTxVerification> {
   if (!upload.blobObjectId) {
-    throw new Error('Walrus 업로드는 성공했지만 Sui object ID가 없어 Tx를 확인할 수 없습니다.')
+    throw new Error('Walrus upload succeeded, but Tx verification cannot proceed because the Sui object ID is missing.')
   }
 
   const maxAttempts = 5
@@ -1696,7 +1696,7 @@ async function verifyWalrusUploadTx({
         objectId: upload.blobObjectId,
       })
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error('Sui Tx 확인에 실패했습니다.')
+      lastError = error instanceof Error ? error : new Error('Sui Tx verification failed.')
 
       if (attempt < maxAttempts - 1) {
         await wait(700 * (attempt + 1))
@@ -1704,7 +1704,7 @@ async function verifyWalrusUploadTx({
     }
   }
 
-  throw lastError ?? new Error('Sui fullnode에서 Walrus Tx를 확인하지 못했습니다.')
+  throw lastError ?? new Error('Could not verify the Walrus Tx on the Sui fullnode.')
 }
 
 async function fetchSuiObjectTx({
@@ -1738,7 +1738,7 @@ async function fetchSuiObjectTx({
   const responseBody = parseJson(responseText)
 
   if (!response.ok) {
-    throw new Error(`Sui Tx 확인에 실패했습니다. ${responseText || response.statusText}`)
+    throw new Error(`Sui Tx verification failed. ${responseText || response.statusText}`)
   }
 
   const root = asRecord(responseBody)
@@ -1747,7 +1747,7 @@ async function fetchSuiObjectTx({
   const error = asRecord(root?.error) ?? asRecord(result?.error)
 
   if (error) {
-    throw new Error(readString(error.message) ?? 'Sui fullnode에서 object를 찾지 못했습니다.')
+    throw new Error(readString(error.message) ?? 'Could not find the object on the Sui fullnode.')
   }
 
   const previousTransaction = readString(data?.previousTransaction)
@@ -1756,15 +1756,15 @@ async function fetchSuiObjectTx({
   const objectType = readString(data?.type)
 
   if (!previousTransaction) {
-    throw new Error('Sui object는 조회됐지만 이전 Tx digest가 없습니다.')
+    throw new Error('The Sui object was found, but it has no previous Tx digest.')
   }
 
   if (objectType && !objectType.includes('::blob::Blob')) {
-    throw new Error('Sui object가 Walrus blob object가 아닙니다.')
+    throw new Error('The Sui object is not a Walrus blob object.')
   }
 
   if (expectedOwner && objectOwner && objectOwner !== expectedOwner) {
-    throw new Error('Walrus blob object 소유자가 현재 지갑 주소와 다릅니다.')
+    throw new Error('The Walrus blob object owner does not match the current wallet address.')
   }
 
   return {
@@ -1801,7 +1801,7 @@ function readModiSealPackageId() {
     return DEFAULT_MODI_TESTNET_SEAL_PACKAGE_ID
   }
 
-  throw new Error('Seal 암호화를 위해 EXPO_PUBLIC_MODI_SEAL_PACKAGE_ID가 필요합니다.')
+  throw new Error('EXPO_PUBLIC_MODI_SEAL_PACKAGE_ID is required for Seal encryption.')
 }
 
 function readSealKeyServerConfigs(): KeyServerConfig[] {
@@ -1812,7 +1812,7 @@ function readSealKeyServerConfigs(): KeyServerConfig[] {
     const configs = Array.isArray(parsed) ? parsed.map(normalizeSealKeyServerConfig).filter(isPresent) : []
 
     if (!configs.length) {
-      throw new Error('EXPO_PUBLIC_SEAL_KEY_SERVER_CONFIGS 값이 올바르지 않습니다.')
+      throw new Error('EXPO_PUBLIC_SEAL_KEY_SERVER_CONFIGS is invalid.')
     }
 
     return configs
@@ -1947,30 +1947,30 @@ function wait(ms: number) {
 
 function getParticipantLabel(loginId: string) {
   if (loginId === 'user-a2048') {
-    return '30대 활동 데이터 신청자'
+    return 'Activity data applicant in their 30s'
   }
 
   if (loginId === 'user-a2128') {
-    return '30대 수면 회복 참여자'
+    return 'Sleep recovery participant in their 30s'
   }
 
   if (loginId === 'han-demo-risk') {
     return 'Seogwipo wearable cohort participant'
   }
 
-  return `${loginId} 사용자`
+  return `${loginId} user`
 }
 
 function getSubmissionCategory(request: ResearchRequest) {
   if (request.requiredConditionTags.some((tag) => tag.includes('sleep'))) {
-    return '수면 회복'
+    return 'Sleep recovery'
   }
 
   if (request.requiredConditionTags.some((tag) => tag.includes('heart') || tag.includes('hrv'))) {
-    return '심혈관 요약'
+    return 'Cardio summary'
   }
 
-  return '활동 데이터'
+  return 'Activity data'
 }
 
 function getConditionLabel(tag: string) {

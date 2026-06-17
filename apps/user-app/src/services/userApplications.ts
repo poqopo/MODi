@@ -50,7 +50,7 @@ export async function fetchUserResearchApplications(loginId: string): Promise<Us
 
 export async function joinResearchProject({ loginId, request }: JoinResearchProjectInput): Promise<UserResearchApplication> {
   if (!isSupabaseConfigured) {
-    throw new Error('Supabase 설정이 필요합니다.')
+    throw new Error('Supabase configuration is required.')
   }
 
   const supabase = getSupabaseClient()
@@ -97,18 +97,18 @@ function isUserResearchApplication(application: UserResearchApplication) {
 
 function getParticipantLabel(loginId: string) {
   if (loginId === 'user-a2048') {
-    return '30대 활동 데이터 신청자'
+    return 'Activity data applicant in their 30s'
   }
 
   if (loginId === 'user-a2128') {
-    return '30대 수면 회복 참여자'
+    return 'Sleep recovery participant in their 30s'
   }
 
   if (loginId === 'han-demo-risk') {
     return 'Seogwipo wearable cohort participant'
   }
 
-  return `${loginId} 사용자`
+  return `${loginId} user`
 }
 
 function normalizeApplicationStatus(value: unknown): UserApplicationStatus {

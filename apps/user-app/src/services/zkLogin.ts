@@ -77,7 +77,7 @@ export function getZkLoginConfigStatus() {
   }
 
   if (!readEnokiApiKey() && !isSupabaseConfigured) {
-    missing.push('EXPO_PUBLIC_ENOKI_API_KEY 또는 EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY')
+    missing.push('EXPO_PUBLIC_ENOKI_API_KEY or EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY')
   }
 
   return {

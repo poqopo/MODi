@@ -6,12 +6,14 @@ import { SLUSH_WALLET_NAME } from '@mysten/slush-wallet'
 import { AuthGate } from '@/components/auth/auth-gate'
 import { AppHeader } from '@/components/common/app-header'
 import {
+  buildDocsPath,
   buildLandingPath,
   buildResearchCreatePath,
   buildResearchProjectPath,
   parseAppRoute,
   type ProjectView,
 } from '@/lib/routes'
+import { DocsPage } from '@/pages/DocsPage'
 import { LandingPage } from '@/pages/LandingPage'
 import { ResearchCreatePage } from '@/pages/ResearchCreatePage'
 
@@ -53,6 +55,10 @@ function App() {
 
   const goHome = () => {
     navigateToPath(buildLandingPath())
+  }
+
+  const goDocs = () => {
+    navigateToPath(buildDocsPath())
   }
 
   const goCreateResearch = useCallback(() => {
@@ -128,10 +134,15 @@ function App() {
             onProjectRoute={goProjectRoute}
           />
         </AuthGate>
+      ) : route.page === 'docs' ? (
+        <>
+          <AppHeader activePage="docs" onCreateResearch={goCreateResearch} onGoHome={goHome} onViewDocs={goDocs} />
+          <DocsPage />
+        </>
       ) : (
         <>
-          <AppHeader activePage="landing" onCreateResearch={goCreateResearch} onGoHome={goHome} />
-          <LandingPage onCreateResearch={goCreateResearch} />
+          <AppHeader activePage="landing" onCreateResearch={goCreateResearch} onGoHome={goHome} onViewDocs={goDocs} />
+          <LandingPage onCreateResearch={goCreateResearch} onViewDocs={goDocs} />
         </>
       )}
     </main>

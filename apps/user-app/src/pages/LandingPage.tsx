@@ -25,12 +25,12 @@ export function LandingPage({ onStart }: LandingPageProps) {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.previewPanel}>
           <PreviewItem
-            detail="걸음 수, 수면, 심박수 같은 개인 건강 지표를 직접 관리"
+            detail="Manage personal health metrics such as steps, sleep, and heart rate"
             icon={ShieldCheck}
-            label="헬스케어 마이데이터"
+            label="Healthcare MyData"
           />
-          <PreviewItem detail="기관 요청 정책에 맞춰 로컬 가명처리와 Agent 검증을 수행" icon={DatabaseZap} label="안전한 데이터 제공" />
-          <PreviewItem detail="동의, 접근, 제출, 보상 상태를 앱에서 투명하게 확인" icon={Wallet} label="제공 내역 관리" />
+          <PreviewItem detail="Run local pseudonymization and Agent verification against institution policy" icon={DatabaseZap} label="Safe Data Sharing" />
+          <PreviewItem detail="Track consent, access, submissions, and rewards in one app" icon={Wallet} label="Sharing History" />
         </View>
       </ScrollView>
 
@@ -44,7 +44,7 @@ export function LandingPage({ onStart }: LandingPageProps) {
 function GoogleSignInButton({ onPress }: { onPress: () => void }) {
   return (
     <Pressable
-      accessibilityLabel="Google로 시작하기"
+      accessibilityLabel="Continue with Google"
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.googleButton, pressed ? styles.pressed : null]}
@@ -52,7 +52,7 @@ function GoogleSignInButton({ onPress }: { onPress: () => void }) {
       <View style={styles.googleMark}>
         <Text style={styles.googleMarkText}>G</Text>
       </View>
-      <Text style={styles.googleButtonText}>Google로 시작하기</Text>
+      <Text style={styles.googleButtonText}>Continue with Google</Text>
       <View style={styles.googleSpacer} />
     </Pressable>
   )
