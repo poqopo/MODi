@@ -1,5 +1,3 @@
-import { SealClient, type KeyServerConfig } from '@mysten/seal'
-import { SuiGrpcClient } from '@mysten/sui/grpc'
 import * as Crypto from 'expo-crypto'
 import type { ResearchRequest } from '../types/dashboard'
 import { getSupabaseClient, isSupabaseConfigured } from './supabase'
@@ -7,12 +5,7 @@ import { getSupabaseClient, isSupabaseConfigured } from './supabase'
 declare const process: {
   env: {
     EXPO_PUBLIC_SUI_NETWORK?: string
-    EXPO_PUBLIC_MODI_SEAL_PACKAGE_ID?: string
-    EXPO_PUBLIC_SEAL_AGGREGATOR_URL?: string
-    EXPO_PUBLIC_SEAL_KEY_SERVER_CONFIGS?: string
-    EXPO_PUBLIC_SEAL_KEY_SERVER_OBJECT_IDS?: string
-    EXPO_PUBLIC_SEAL_THRESHOLD?: string
-    EXPO_PUBLIC_SEAL_VERIFY_KEY_SERVERS?: string
+    EXPO_PUBLIC_PLATFORM_ENCRYPTION_KEY_ID?: string
     EXPO_PUBLIC_WALRUS_AGGREGATOR_URL?: string
     EXPO_PUBLIC_WALRUS_EPOCHS?: string
     EXPO_PUBLIC_WALRUS_PUBLISHER_URL?: string
@@ -128,9 +121,9 @@ type PrivacySafetyEdit = {
 }
 
 type EncryptedDataset = {
-  encryptionMode: 'seal-sdk'
+  encryptionKeyId: string
+  encryptionMode: 'platform_encryption_v1'
   encryptedPayload: string
-  sealIdentityHex: string
 }
 
 type AgentMemoryArtifactKind = 'agent_workflow_manifest' | 'privacy_verification_receipt' | 'pseudonymization_plan' | 'security_memory'
@@ -210,16 +203,7 @@ type SecurityMemoryPatch = {
 const DEFAULT_WALRUS_AGGREGATOR_URL = 'https://aggregator.walrus-testnet.walrus.space'
 const DEFAULT_WALRUS_EPOCHS = '5'
 const DEFAULT_WALRUS_PUBLISHER_URL = 'https://publisher.walrus-testnet.walrus.space'
-const DEFAULT_SEAL_KEY_SERVER_CONFIGS: KeyServerConfig[] = [
-  {
-    aggregatorUrl: 'https://seal-aggregator-testnet.mystenlabs.com',
-    objectId: '0xb012378c9f3799fb5b1a7083da74a4069e3c3f1c93de0b27212a5799ce1e1e98',
-    weight: 1,
-  },
-]
-const DEFAULT_MODI_TESTNET_SEAL_PACKAGE_ID = '0xc5be8a456d0ba7d33fbcff12e92d73181a3817872f6598f5cea65a5326ab3e21'
-const DEFAULT_SEAL_THRESHOLD = 1
-const DEFAULT_SEAL_TIMEOUT_MS = 10_000
+const DEFAULT_PLATFORM_ENCRYPTION_KEY_ID = 'modi-platform-demo-key-v1'
 const AGENT_MEMORY_BUNDLE_SCHEMA_VERSION = 'modi.agent-memory-bundle.v1'
 const AGENT_MEMORY_SCHEMA_VERSION = 'modi.agent-memory.v1'
 const ENCRYPTED_DATASET_SCHEMA_VERSION = 'modi.encrypted-health-dataset.v1'
@@ -469,8 +453,8 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
       })
     : null
   reportSubmissionProgress(onProgress, {
-    detail: 'Converting the verified payload into a Seal SDK-based encrypted dataset.',
-    label: 'Encrypting dataset',
+    detail: 'Converting the verified payload into a platform_encryption_v1 dataset envelope.',
+    label: 'Platform encrypting dataset',
     progress: 84,
     stage: 'encrypting',
   })
@@ -519,7 +503,7 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
       pseudonymizationPlanMemory,
       request,
       safetyEdits,
-      sealIdentityHex: encryptedDataset.sealIdentityHex,
+      encryptionKeyId: encryptedDataset.encryptionKeyId,
       securityMemory,
       securityMemoryArtifact,
       securityMemoryPatches,
@@ -572,9 +556,9 @@ export async function submitParticipantData({ loginId, onProgress, request }: Su
       privacyPolicyHash: policyHash,
       privacyPolicyVersion: policyVersion,
       encryptionMode: encryptedDataset.encryptionMode,
-      encryptionProvider: 'seal',
-      sealIdentityHex: encryptedDataset.sealIdentityHex,
-      sealPolicyId: request.sealPolicyId ?? null,
+      encryptionProvider: 'platform',
+      sealIdentityHex: null,
+      sealPolicyId: null,
       privacyVerificationFindings: privacyVerification.findings,
       privacyVerificationPayloadHash: privacyVerification.payloadHash,
       privacyVerificationReceiptHash: privacyVerification.receiptHash,
@@ -1040,6 +1024,7 @@ function mergeRecommendedTransforms(
 function buildWorkflowManifestMemory({
   createdAt,
   encryptedDatasetHash,
+  encryptionKeyId,
   participantPseudonymId,
   policyHash,
   policyPack,
@@ -1047,7 +1032,6 @@ function buildWorkflowManifestMemory({
   pseudonymizationPlanMemory,
   request,
   safetyEdits,
-  sealIdentityHex,
   securityMemory,
   securityMemoryArtifact,
   securityMemoryPatches,
@@ -1058,6 +1042,7 @@ function buildWorkflowManifestMemory({
 }: {
   createdAt: string
   encryptedDatasetHash: string
+  encryptionKeyId: string
   participantPseudonymId: string
   policyHash: string | null
   policyPack: PolicyPackSnapshot | null
@@ -1065,7 +1050,6 @@ function buildWorkflowManifestMemory({
   pseudonymizationPlanMemory: UploadedAgentMemoryArtifact
   request: ResearchRequest
   safetyEdits: PrivacySafetyEdit[]
-  sealIdentityHex: string
   securityMemory: SecurityMemorySnapshot | null
   securityMemoryArtifact: UploadedAgentMemoryArtifact | null
   securityMemoryPatches: SecurityMemoryPatch[]
@@ -1115,9 +1099,11 @@ function buildWorkflowManifestMemory({
     artifacts: {
       encryptedDataset: {
         blobId: walrusBlobId,
+        encryptionKeyId,
+        encryptionMode: 'platform_encryption_v1',
+        encryptionProvider: 'platform',
         hash: encryptedDatasetHash,
         objectId: walrusBlobObjectId,
-        sealIdentityHex,
         txDigest: walrusTxDigest,
       },
       policyPack: policyPack
@@ -1359,7 +1345,7 @@ function buildWalrusSubmissionPayload({
             walrusBlobId: policyPack.blobId,
           }
         : null,
-      sealPolicyId: request.sealPolicyId ?? null,
+      sealPolicyId: null,
     },
     policyPack: policyPack?.payload ?? null,
     participant: {
@@ -1559,27 +1545,18 @@ async function encryptDatasetForWalrus({
   privacyPolicyHash: string | null
   pseudonymizedPayloadHash: string
 }): Promise<EncryptedDataset> {
-  const sealIdentityHex = await sha256Hex(
-    ['modi', 'encrypted-health-dataset', projectPublicCode, privacyPolicyHash ?? 'no-policy', pseudonymizedPayloadHash].join(':'),
-  )
-  const packageId = readModiSealPackageId()
-  const keyServerConfigs = readSealKeyServerConfigs()
-  const threshold = readSealThreshold(keyServerConfigs)
-  const sealClient = new SealClient({
-    serverConfigs: keyServerConfigs,
-    suiClient: new SuiGrpcClient({
-      baseUrl: readSuiFullnodeUrl(),
-      network: readSuiNetwork(process.env.EXPO_PUBLIC_SUI_NETWORK),
-    }),
-    timeout: DEFAULT_SEAL_TIMEOUT_MS,
-    verifyKeyServers: readSealVerifyKeyServers(),
+  const encryptionKeyId = readPlatformEncryptionKeyId()
+  const nonce = Crypto.getRandomBytes(12)
+  const plaintextBytes = utf8Encode(plaintext)
+  const platformKeyHex = await derivePlatformEncryptionKeyHex({
+    encryptionKeyId,
+    privacyPolicyHash,
+    projectPublicCode,
   })
-  const plaintextBytes = new TextEncoder().encode(plaintext)
-  const { encryptedObject } = await sealClient.encrypt({
-    data: plaintextBytes,
-    id: sealIdentityHex,
-    packageId,
-    threshold,
+  const encryptionResult = await encryptWithPlatformKey({
+    nonce,
+    plaintextBytes,
+    platformKeyHex,
   })
   const envelope = {
     schemaVersion: ENCRYPTED_DATASET_SCHEMA_VERSION,
@@ -1590,31 +1567,97 @@ async function encryptDatasetForWalrus({
       plaintextSchemaVersion: SUBMISSION_SCHEMA_VERSION,
     },
     encryption: {
-      provider: 'seal',
-      mode: 'seal-sdk',
-      algorithm: 'Seal threshold encryption',
-      keyManagement: 'seal-key-server-threshold',
-      keyServers: keyServerConfigs.map(({ aggregatorUrl, objectId, weight }) => ({
-        aggregatorUrl: aggregatorUrl ?? null,
-        objectId,
-        weight,
-      })),
-      packageId,
-      sealIdentityHex,
-      sealIdentity: `0x${sealIdentityHex}`,
-      threshold,
+      provider: 'platform',
+      mode: 'platform_encryption_v1',
+      algorithm: encryptionResult.algorithm,
+      keyId: encryptionKeyId,
+      keyManagement: 'platform-managed-demo-key',
+      nonceBase64: bytesToBase64(nonce),
       privacyPolicyHash,
     },
     cipher: {
-      encryptedObjectBase64: bytesToBase64(encryptedObject),
+      ciphertextBase64: bytesToBase64(encryptionResult.ciphertext),
     },
   }
 
   return {
-    encryptionMode: 'seal-sdk',
+    encryptionKeyId,
+    encryptionMode: 'platform_encryption_v1',
     encryptedPayload: stableStringify(envelope),
-    sealIdentityHex,
   }
+}
+
+async function derivePlatformEncryptionKeyHex({
+  encryptionKeyId,
+  privacyPolicyHash,
+  projectPublicCode,
+}: {
+  encryptionKeyId: string
+  privacyPolicyHash: string | null
+  projectPublicCode: string
+}) {
+  return sha256Hex(
+    ['modi', 'platform_encryption_v1', encryptionKeyId, projectPublicCode, privacyPolicyHash ?? 'no-policy'].join(':'),
+  )
+}
+
+async function encryptWithPlatformKey({
+  nonce,
+  plaintextBytes,
+  platformKeyHex,
+}: {
+  nonce: Uint8Array
+  plaintextBytes: Uint8Array
+  platformKeyHex: string
+}) {
+  const subtle = globalThis.crypto?.subtle
+
+  if (subtle) {
+    const key = await subtle.importKey('raw', toArrayBuffer(hexToBytes(platformKeyHex)), { name: 'AES-GCM' }, false, ['encrypt'])
+    const ciphertext = await subtle.encrypt({ iv: toArrayBuffer(nonce), name: 'AES-GCM' }, key, toArrayBuffer(plaintextBytes))
+
+    return {
+      algorithm: 'AES-GCM',
+      ciphertext: new Uint8Array(ciphertext),
+    }
+  }
+
+  return {
+    algorithm: 'SHA-256 stream XOR fallback',
+    ciphertext: await xorWithSha256KeyStream({
+      input: plaintextBytes,
+      nonce,
+      platformKeyHex,
+    }),
+  }
+}
+
+async function xorWithSha256KeyStream({
+  input,
+  nonce,
+  platformKeyHex,
+}: {
+  input: Uint8Array
+  nonce: Uint8Array
+  platformKeyHex: string
+}) {
+  const output = new Uint8Array(input.length)
+  const nonceBase64 = bytesToBase64(nonce)
+  let offset = 0
+  let counter = 0
+
+  while (offset < input.length) {
+    const block = hexToBytes(await sha256Hex(`${platformKeyHex}:${nonceBase64}:${counter}`))
+
+    for (let index = 0; index < block.length && offset < input.length; index += 1) {
+      output[offset] = input[offset] ^ block[index]
+      offset += 1
+    }
+
+    counter += 1
+  }
+
+  return output
 }
 
 async function uploadToWalrus({ loginId, payload }: { loginId: string; payload: string }): Promise<WalrusUploadResult> {
@@ -1790,85 +1833,13 @@ function readWalrusEpochs() {
   return Number.isFinite(value) && value > 0 ? String(Math.floor(value)) : DEFAULT_WALRUS_EPOCHS
 }
 
-function readModiSealPackageId() {
-  const packageId = normalizeSuiObjectId(process.env.EXPO_PUBLIC_MODI_SEAL_PACKAGE_ID)
-
-  if (packageId) {
-    return packageId
-  }
-
-  if (readSuiNetwork(process.env.EXPO_PUBLIC_SUI_NETWORK) === 'testnet') {
-    return DEFAULT_MODI_TESTNET_SEAL_PACKAGE_ID
-  }
-
-  throw new Error('EXPO_PUBLIC_MODI_SEAL_PACKAGE_ID is required for Seal encryption.')
-}
-
-function readSealKeyServerConfigs(): KeyServerConfig[] {
-  const configuredJson = process.env.EXPO_PUBLIC_SEAL_KEY_SERVER_CONFIGS?.trim()
-
-  if (configuredJson) {
-    const parsed = parseJson(configuredJson)
-    const configs = Array.isArray(parsed) ? parsed.map(normalizeSealKeyServerConfig).filter(isPresent) : []
-
-    if (!configs.length) {
-      throw new Error('EXPO_PUBLIC_SEAL_KEY_SERVER_CONFIGS is invalid.')
-    }
-
-    return configs
-  }
-
-  const objectIds = process.env.EXPO_PUBLIC_SEAL_KEY_SERVER_OBJECT_IDS?.split(',').map(normalizeSuiObjectId).filter(isPresent) ?? []
-
-  if (objectIds.length) {
-    const aggregatorUrl = readSealAggregatorUrl()
-    return objectIds.map((objectId) => ({
-      ...(aggregatorUrl ? { aggregatorUrl } : {}),
-      objectId,
-      weight: 1,
-    }))
-  }
-
-  return DEFAULT_SEAL_KEY_SERVER_CONFIGS
-}
-
-function normalizeSealKeyServerConfig(value: unknown): KeyServerConfig | null {
-  const config = asRecord(value)
-  const objectId = normalizeSuiObjectId(config?.objectId)
-  const weight = readPositiveInteger(config?.weight, 1)
-
-  if (!objectId || !weight) {
-    return null
-  }
-
-  const aggregatorUrl = readUrl(config?.aggregatorUrl)
-  const apiKeyName = readString(config?.apiKeyName)
-  const apiKey = readString(config?.apiKey)
-
-  return {
-    ...(aggregatorUrl ? { aggregatorUrl } : {}),
-    ...(apiKeyName && apiKey ? { apiKeyName, apiKey } : {}),
-    objectId,
-    weight,
-  }
-}
-
-function readSealAggregatorUrl() {
-  return readUrl(process.env.EXPO_PUBLIC_SEAL_AGGREGATOR_URL)
-}
-
-function readSealThreshold(keyServerConfigs: KeyServerConfig[]) {
-  const totalWeight = keyServerConfigs.reduce((sum, config) => sum + config.weight, 0)
-  const configuredThreshold = readPositiveInteger(process.env.EXPO_PUBLIC_SEAL_THRESHOLD, DEFAULT_SEAL_THRESHOLD)
-  return Math.min(configuredThreshold, totalWeight)
-}
-
-function readSealVerifyKeyServers() {
-  return process.env.EXPO_PUBLIC_SEAL_VERIFY_KEY_SERVERS?.trim().toLowerCase() === 'true'
-}
-
 function sha256Hex(value: string) {
   return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value)
+}
+
+function readPlatformEncryptionKeyId() {
+  const value = process.env.EXPO_PUBLIC_PLATFORM_ENCRYPTION_KEY_ID?.trim()
+  return value || DEFAULT_PLATFORM_ENCRYPTION_KEY_ID
 }
 
 function readSuiFullnodeUrl() {
@@ -1886,25 +1857,6 @@ function readSuiNetwork(value: string | undefined): SuiNetwork {
 function normalizeSuiAddress(value: string) {
   const trimmedValue = value.trim().toLowerCase()
   return /^0x[0-9a-f]{64}$/.test(trimmedValue) ? trimmedValue : null
-}
-
-function normalizeSuiObjectId(value: unknown) {
-  const text = readString(value)?.toLowerCase()
-  return text && /^0x[0-9a-f]{1,64}$/.test(text) ? text : null
-}
-
-function readPositiveInteger(value: unknown, fallback: number) {
-  const numberValue = Number(value)
-  return Number.isFinite(numberValue) && numberValue >= 1 ? Math.floor(numberValue) : fallback
-}
-
-function readUrl(value: unknown) {
-  const text = readString(value)
-  return text && /^https?:\/\//.test(text) ? text : null
-}
-
-function isPresent<T>(value: T | null | undefined): value is T {
-  return value !== null && value !== undefined
 }
 
 function parseJson(value: string) {
@@ -2024,6 +1976,44 @@ function bytesToBase64(bytes: Uint8Array) {
   }
 
   return result
+}
+
+function hexToBytes(hex: string) {
+  const bytes = new Uint8Array(hex.length / 2)
+
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16)
+  }
+
+  return bytes
+}
+
+function toArrayBuffer(bytes: Uint8Array) {
+  const buffer = new ArrayBuffer(bytes.byteLength)
+  new Uint8Array(buffer).set(bytes)
+  return buffer
+}
+
+function utf8Encode(value: string) {
+  if (typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(value)
+  }
+
+  const encoded = encodeURIComponent(value)
+  const bytes: number[] = []
+
+  for (let index = 0; index < encoded.length; index += 1) {
+    const char = encoded[index]
+
+    if (char === '%') {
+      bytes.push(Number.parseInt(encoded.slice(index + 1, index + 3), 16))
+      index += 2
+    } else {
+      bytes.push(char.charCodeAt(0))
+    }
+  }
+
+  return new Uint8Array(bytes)
 }
 
 function stableStringify(value: unknown): string {

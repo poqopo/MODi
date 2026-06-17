@@ -20,12 +20,15 @@ import {
   CheckCircle2,
   ChevronRight,
   ClipboardList,
+  DatabaseZap,
+  FileKey2,
   Flame,
   Footprints,
   HeartPulse,
   LockKeyhole,
   Moon,
   RefreshCw,
+  ShieldCheck,
   UploadCloud,
   Wallet,
   X,
@@ -129,6 +132,28 @@ const submissionProgressSteps: Array<{
   {
     label: 'Walrus Submission',
     stages: ['walrus-uploading', 'tx-verifying', 'registering', 'complete'],
+  },
+]
+
+const privacyAgentMemoryCards: Array<{
+  detail: string
+  icon: LucideIcon
+  label: string
+}> = [
+  {
+    detail: 'The user app fetches the institution policy_pack from Walrus and verifies its hash before editing data.',
+    icon: FileKey2,
+    label: 'Walrus policy memory',
+  },
+  {
+    detail: 'The platform Agent checks forbidden fields, hidden re-identification risk, and learned risk patterns.',
+    icon: BrainCircuit,
+    label: 'Privacy Agent check',
+  },
+  {
+    detail: 'Walrus stores receipts, Security Memory, and workflow manifests without storing raw health data.',
+    icon: DatabaseZap,
+    label: 'memWal audit trail',
   },
 ]
 
@@ -824,6 +849,116 @@ function getSubmissionProgressStepState(
   if (stepIndex < activeStepIndex || currentStage === 'complete') return 'complete'
   if (stepIndex === activeStepIndex) return 'active'
   return 'pending'
+}
+
+function getSubmissionMemoryStage(stage: ParticipantSubmissionProgressStage) {
+  if (stage === 'policy-loading') {
+    return {
+      artifact: 'policy_pack',
+      detail: 'The user app reads the institution policy from Walrus and checks the stored hash.',
+      icon: FileKey2,
+      memory: 'Walrus policy memory',
+      title: 'Recalling request policy',
+    }
+  }
+
+  if (stage === 'security-memory-loading') {
+    return {
+      artifact: 'security_memory',
+      detail: 'Known risk patterns from earlier submissions are loaded before verification.',
+      icon: BrainCircuit,
+      memory: 'Reusable Security Memory',
+      title: 'Recalling learned risks',
+    }
+  }
+
+  if (stage === 'pseudonymizing') {
+    return {
+      artifact: 'pseudonymization_plan',
+      detail: 'Raw health fields are converted locally before the platform sees the payload.',
+      icon: LockKeyhole,
+      memory: 'Local privacy edit',
+      title: 'Making data safe on device',
+    }
+  }
+
+  if (stage === 'verifying' || stage === 'reverifying') {
+    return {
+      artifact: 'verification_receipt',
+      detail: 'The Privacy Agent verifies the payload against policy memory and Security Memory.',
+      icon: ShieldCheck,
+      memory: 'Agent verification',
+      title: stage === 'reverifying' ? 'Running the Agent again' : 'Running the Privacy Agent',
+    }
+  }
+
+  if (stage === 'hardening') {
+    return {
+      artifact: 'security_memory_patch',
+      detail: 'The Agent found a risk signal, so the app generalizes the payload and prepares a safer retry.',
+      icon: BrainCircuit,
+      memory: 'Learned risk update',
+      title: 'Applying safer local edits',
+    }
+  }
+
+  if (stage === 'verified') {
+    return {
+      artifact: 'receipt_hash',
+      detail: 'The final payload passed the Agent check and can be encrypted.',
+      icon: ShieldCheck,
+      memory: 'Verified payload hash',
+      title: 'Privacy check passed',
+    }
+  }
+
+  if (stage === 'agent-memory-uploading' || stage === 'security-memory-updating') {
+    return {
+      artifact: 'receipt + manifest',
+      detail: 'Walrus stores the Agent receipt, workflow manifest, and any updated Security Memory.',
+      icon: DatabaseZap,
+      memory: 'Walrus memWal artifacts',
+      title: stage === 'security-memory-updating' ? 'Updating Security Memory' : 'Writing Agent memory',
+    }
+  }
+
+  if (stage === 'encrypting') {
+    return {
+      artifact: 'encrypted_dataset',
+      detail: 'Only the verified payload is encrypted before being uploaded.',
+      icon: LockKeyhole,
+      memory: 'No raw health data',
+      title: 'Encrypting verified data',
+    }
+  }
+
+  if (stage === 'walrus-uploading' || stage === 'tx-verifying' || stage === 'registering') {
+    return {
+      artifact: 'Walrus blob + Tx',
+      detail: 'The encrypted dataset and references are linked to the submission record.',
+      icon: DatabaseZap,
+      memory: 'Durable Walrus storage',
+      title: 'Publishing the verified package',
+    }
+  }
+
+  if (stage === 'complete') {
+    return {
+      artifact: 'download-ready package',
+      detail: 'The institution can download the encrypted dataset and inspect the Agent audit chain.',
+      icon: CheckCircle2,
+      memory: 'End-to-end audit trail',
+      title: 'Submission ready',
+    }
+  }
+
+  return {
+    artifact: 'request scope',
+    detail: 'The app is preparing the study scope before reading Walrus memory.',
+    icon: ClipboardList,
+    memory: 'Preparing',
+    title: 'Preparing the workflow',
+  }
 }
 
 function getAppleHealthHeaderMessage({
@@ -1965,7 +2100,7 @@ function ParticipationDetailModal({
         ? `Tx ${formatCompactWalletAddress(submissionResult.walrusTxDigest)}`
         : `Blob ${formatCompactWalletAddress(submissionResult.walrusBlobId)}`
       setSubmissionStatus('submitted')
-      setSubmissionMessage(`User-app pseudonymization, Privacy Agent verification, Seal encryption, and Walrus upload are complete. ${txLabel}`)
+      setSubmissionMessage(`User-app pseudonymization, Privacy Agent verification, platform_encryption_v1, and Walrus upload are complete. ${txLabel}`)
     } catch (error) {
       setSubmissionStatus('error')
       setSubmissionMessage(error instanceof Error ? error.message : 'Data submission failed.')
@@ -2063,8 +2198,13 @@ function ParticipationDetailModal({
                 </Pressable>
               </View>
 
-              <View style={styles.confirmModalBody}>
-                <Text style={styles.sectionLead}>The user app pseudonymizes the requested fields, passes Privacy Agent verification and Seal encryption, then submits the dataset to Walrus.</Text>
+              <ScrollView
+                contentContainerStyle={styles.confirmModalBody}
+                showsVerticalScrollIndicator={false}
+                style={styles.confirmModalScroll}
+              >
+                <Text style={styles.sectionLead}>The user app pseudonymizes the requested fields, passes Privacy Agent verification, wraps the dataset with platform_encryption_v1, then submits it to Walrus.</Text>
+                <PrivacyAgentMemoryPreview />
                 <View style={styles.requiredDataList}>
                   {requiredData.map((item) => (
                     <View key={item.label} style={styles.requiredDataRow}>
@@ -2076,7 +2216,7 @@ function ParticipationDetailModal({
                 {submissionStatus === 'error' && submissionMessage ? (
                   <Text style={[styles.sectionLead, styles.errorText]}>{submissionMessage}</Text>
                 ) : null}
-              </View>
+              </ScrollView>
 
               <View style={styles.confirmModalFooter}>
                 <Button
@@ -2105,6 +2245,7 @@ function ParticipationDetailModal({
               <View style={styles.loadingProgressBlock}>
                 <Progress value={submissionLoadingProgress} />
               </View>
+              <SubmissionMemoryStagePanel progress={submissionProgress} />
               <View style={styles.loadingStepList}>
                 {submissionProgressSteps.map((step, index) => {
                   const stepState = getSubmissionProgressStepState(submissionProgress.stage, index)
@@ -2139,6 +2280,62 @@ function ParticipationDetailModal({
         </Modal>
       </SafeAreaView>
     </Modal>
+  )
+}
+
+function PrivacyAgentMemoryPreview() {
+  return (
+    <View style={styles.agentMemoryPreview}>
+      <View style={styles.agentMemoryPreviewHeader}>
+        <BrainCircuit color={colors.primary} size={18} strokeWidth={2.3} />
+        <View style={styles.agentMemoryPreviewCopy}>
+          <Text style={styles.agentMemoryPreviewTitle}>Privacy Agent memory chain</Text>
+          <Text style={styles.agentMemoryPreviewText}>
+            The Agent does not approve blindly. It reuses Walrus policy memory and writes a reusable audit trail.
+          </Text>
+        </View>
+      </View>
+      <View style={styles.agentMemoryCardList}>
+        {privacyAgentMemoryCards.map((item) => {
+          const Icon = item.icon
+
+          return (
+            <View key={item.label} style={styles.agentMemoryCard}>
+              <View style={styles.agentMemoryIcon}>
+                <Icon color={colors.primary} size={16} strokeWidth={2.25} />
+              </View>
+              <View style={styles.agentMemoryCardCopy}>
+                <Text style={styles.agentMemoryLabel}>{item.label}</Text>
+                <Text style={styles.agentMemoryDetail}>{item.detail}</Text>
+              </View>
+            </View>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
+function SubmissionMemoryStagePanel({ progress }: { progress: ParticipantSubmissionProgress }) {
+  const stage = getSubmissionMemoryStage(progress.stage)
+  const Icon = stage.icon
+
+  return (
+    <View style={styles.submissionMemoryPanel}>
+      <View style={styles.submissionMemoryHeader}>
+        <View style={styles.submissionMemoryIcon}>
+          <Icon color={colors.primary} size={17} strokeWidth={2.3} />
+        </View>
+        <View style={styles.submissionMemoryCopy}>
+          <Text style={styles.submissionMemoryTitle}>{stage.title}</Text>
+          <Text style={styles.submissionMemoryDetail}>{stage.detail}</Text>
+        </View>
+      </View>
+      <View style={styles.submissionMemoryTagRow}>
+        <Text numberOfLines={1} style={styles.submissionMemoryTag}>{stage.memory}</Text>
+        <Text numberOfLines={1} style={styles.submissionMemoryTag}>{stage.artifact}</Text>
+      </View>
+    </View>
   )
 }
 
@@ -2928,6 +3125,72 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  agentMemoryCard: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    padding: 12,
+  },
+  agentMemoryCardCopy: {
+    flex: 1,
+    gap: 3,
+    minWidth: 0,
+  },
+  agentMemoryCardList: {
+    gap: 8,
+  },
+  agentMemoryDetail: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  agentMemoryIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.successFill,
+    borderRadius: 16,
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
+  agentMemoryLabel: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  agentMemoryPreview: {
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: 12,
+    padding: 12,
+  },
+  agentMemoryPreviewCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  agentMemoryPreviewHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  agentMemoryPreviewText: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  agentMemoryPreviewTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 19,
+  },
   confirmModalBackdrop: {
     alignItems: 'center',
     backgroundColor: 'rgba(18, 29, 24, 0.38)',
@@ -2963,6 +3226,9 @@ const styles = StyleSheet.create({
     gap: 14,
     justifyContent: 'space-between',
     padding: 16,
+  },
+  confirmModalScroll: {
+    maxHeight: 520,
   },
   confirmModalTitle: {
     color: colors.text,
@@ -3779,6 +4045,63 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.82,
     transform: [{ translateY: 1 }],
+  },
+  submissionMemoryCopy: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
+  },
+  submissionMemoryDetail: {
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  submissionMemoryHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  submissionMemoryIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 17,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: 'center',
+    width: 34,
+  },
+  submissionMemoryPanel: {
+    backgroundColor: colors.background,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: 10,
+    padding: 12,
+  },
+  submissionMemoryTag: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    color: colors.text,
+    flexShrink: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 16,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  submissionMemoryTagRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  submissionMemoryTitle: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 18,
   },
   progressBlock: {
     gap: 8,

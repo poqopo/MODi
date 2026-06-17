@@ -59,6 +59,34 @@ const demoSteps = [
   'Institution downloads verified encrypted datasets and audit records from the dashboard.',
 ]
 
+const memoryArtifacts = [
+  {
+    name: 'policy_pack',
+    role: 'Public request policy',
+    storedOn: 'Walrus before collection',
+  },
+  {
+    name: 'pseudonymization_plan',
+    role: 'Local safety edit recipe',
+    storedOn: 'Walrus after user processing',
+  },
+  {
+    name: 'privacy_verification_receipt',
+    role: 'Privacy Agent decision record',
+    storedOn: 'Walrus after Agent verification',
+  },
+  {
+    name: 'security_memory',
+    role: 'Reusable learned risk pattern',
+    storedOn: 'Walrus only when risk is discovered',
+  },
+  {
+    name: 'agent_workflow_manifest',
+    role: 'End-to-end provenance chain',
+    storedOn: 'Walrus after upload',
+  },
+]
+
 export function DocsPage() {
   return (
     <div className="bg-white">
@@ -187,6 +215,25 @@ export function DocsPage() {
                 text="When a risky quasi-identifier combination is found, the finding becomes memory that can guide the next submission."
               />
             </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>memWal artifact chain</CardTitle>
+                <CardDescription>
+                  These artifacts let the Privacy Agent recall policy, remember risk patterns, and prove what happened without storing raw health data.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3">
+                  {memoryArtifacts.map((artifact) => (
+                    <div className="grid gap-3 rounded-md border border-border bg-canvas-soft p-4 sm:grid-cols-[180px_minmax(0,1fr)_190px]" key={artifact.name}>
+                      <p className="tabular text-sm font-semibold text-ink">{artifact.name}</p>
+                      <p className="text-sm leading-6 text-ink-secondary">{artifact.role}</p>
+                      <p className="text-sm leading-6 text-ink-mute">{artifact.storedOn}</p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </DocsSection>
 
           <DocsSection badge="Agent" id="agent" title="The Privacy/Security Agent is a verifier, not the data owner">
@@ -228,7 +275,7 @@ export function DocsPage() {
           <DocsSection badge="Deployment" id="deployment" title="Deployment model">
             <p>
               Both apps can be deployed as static frontends on Vercel. The user app is exported with Expo web, and the institution
-              dashboard is built with Vite. Supabase, Walrus, Sui, Slush, Enoki, and Seal endpoints remain external HTTPS services.
+              dashboard is built with Vite. Supabase, Walrus, Sui, Slush, and Enoki remain external HTTPS services.
             </p>
             <div className="grid gap-4 md:grid-cols-2">
               <InfoCard icon={HeartPulse} title="User app web" text="Browser mode uses example healthcare data because Apple Health is native-only." />

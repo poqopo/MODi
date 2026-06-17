@@ -506,7 +506,7 @@ function WalletRequiredPanel() {
     <Card>
       <CardHeader>
         <CardTitle>Institution Slush Wallet</CardTitle>
-        <CardDescription>A Sui address is required so the institution can receive decryption access for study submissions.</CardDescription>
+        <CardDescription>A Sui address is required to create studies and connect future policy-gated access.</CardDescription>
       </CardHeader>
       <CardContent>
         <ConnectButton />
@@ -687,8 +687,8 @@ function SlushResearcherCard({ researcherSuiAddress }: { researcherSuiAddress: s
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Decryption Wallet</CardTitle>
-        <CardDescription>Participant submissions issue a Seal AccessGrant to this address.</CardDescription>
+        <CardTitle>Institution Wallet</CardTitle>
+        <CardDescription>Used for study ownership now and future policy-gated decryption access.</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="rounded-md border border-border bg-canvas-soft px-3 py-2 font-mono text-xs text-ink">
@@ -756,7 +756,7 @@ function formatAgentMemoryArtifactLabel(kind: string) {
 
 function buildHealthcareFileName(applicant: ApplicantRecord, submission: SubmissionRecord) {
   const participantRef = formatCompactIdentifier(applicant.applicantCode).replaceAll('.', '')
-  return `modi-${participantRef}-${submission.id}-encrypted-healthcare-dataset.json`
+  return `modi-${participantRef}-${submission.id}-healthcare-dataset.json`
 }
 
 function buildAgentMemoryFileName(applicant: ApplicantRecord, submission: SubmissionRecord, artifact: DashboardAgentMemoryArtifact) {
@@ -1151,7 +1151,7 @@ function SubmissionHistoryModal({
               <Badge variant="secondary">Walrus Blob</Badge>
             </div>
             <p className="mt-3 text-sm leading-6 text-ink-secondary">
-              Download encrypted healthcare datasets uploaded to Walrus from the user app.
+              Download healthcare datasets from Walrus. platform_encryption_v1 envelopes are decrypted in the dashboard before saving.
             </p>
             {downloadError ? <p className="mt-2 text-sm text-destructive">{downloadError}</p> : null}
           </div>
@@ -1250,7 +1250,7 @@ function ProjectDataSetCard({ selectedProject }: { selectedProject: Project }) {
           selectedProject.dataScope.map((scope) => (
             <div key={scope} className="flex items-center justify-between gap-3 rounded-md border border-border bg-canvas-soft px-3 py-2">
               <span className="text-sm font-medium text-ink">{scope}</span>
-              <Badge variant="outline">Seal policy</Badge>
+              <Badge variant="outline">Policy memory</Badge>
             </div>
           ))
         )}
@@ -1431,7 +1431,7 @@ function DataManagementView({
           <div className="flex items-center justify-between gap-3">
             <div>
               <CardTitle>Data Download</CardTitle>
-              <CardDescription>Download encrypted healthcare datasets uploaded to Walrus from the user app</CardDescription>
+              <CardDescription>Download participant healthcare datasets from Walrus with platform_encryption_v1 unwrap</CardDescription>
             </div>
             <DatabaseZap className="h-5 w-5 text-primary" />
           </div>

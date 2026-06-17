@@ -1,7 +1,9 @@
 import {
   ArrowRight,
   BookOpen,
+  BrainCircuit,
   DatabaseZap,
+  FileKey2,
   LockKeyhole,
   ShieldCheck,
   Users,
@@ -175,9 +177,21 @@ function PrivacySafeIntakeSection() {
       <div className="container grid gap-9 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div className="order-2 rounded-lg border border-border bg-white p-5 shadow-surface lg:order-1">
           <div className="grid gap-3">
-            <PrivacyStep title="Policy memory" detail="Your requirements become the live rulebook." />
-            <PrivacyStep title="Local safety edit" detail="Sensitive details are stripped before upload." />
-            <PrivacyStep title="Agent verification" detail="Hidden risk is checked before delivery." />
+            <PrivacyStep
+              icon={FileKey2}
+              title="Walrus policy memory"
+              detail="Your policy_pack becomes the shared rulebook for the user app and the Agent."
+            />
+            <PrivacyStep
+              icon={BrainCircuit}
+              title="Privacy Agent recall"
+              detail="The Agent reads policy memory and learned Security Memory before it verifies a payload."
+            />
+            <PrivacyStep
+              icon={DatabaseZap}
+              title="memWal audit trail"
+              detail="Receipts, risk memory, and workflow manifests stay on Walrus for later inspection."
+            />
           </div>
         </div>
 
@@ -193,11 +207,11 @@ function PrivacySafeIntakeSection() {
   )
 }
 
-function PrivacyStep({ detail, title }: { detail: string; title: string }) {
+function PrivacyStep({ detail, icon: Icon, title }: { detail: string; icon: LucideIcon; title: string }) {
   return (
     <div className="flex items-start gap-4 rounded-md border border-border p-4">
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-canvas-soft">
-        <LockKeyhole className="h-4 w-4 text-primary" />
+        <Icon className="h-4 w-4 text-primary" />
       </div>
       <div>
         <p className="text-sm font-medium text-ink">{title}</p>

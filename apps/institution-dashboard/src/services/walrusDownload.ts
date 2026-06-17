@@ -13,8 +13,9 @@ export async function downloadWalrusBlob({
 }) {
   const downloadUrl = await resolveWalrusDownloadUrlWithRetry({ blobId, objectId })
   const blob = await fetchWalrusBlob(downloadUrl)
+  const downloadBlob = await unwrapPlatformEncryptedDataset(blob)
 
-  triggerBrowserDownload({ blob, fileName })
+  triggerBrowserDownload({ blob: downloadBlob, fileName })
 }
 
 function triggerBrowserDownload({ blob, fileName }: { blob: Blob; fileName: string }) {
@@ -141,6 +142,125 @@ async function fetchWalrusBlob(url: string) {
   }
 }
 
+async function unwrapPlatformEncryptedDataset(blob: Blob) {
+  const text = await blob.text()
+  const envelope = parseJsonRecord(text)
+  const encryption = asRecord(envelope?.encryption)
+
+  if (encryption?.mode !== 'platform_encryption_v1') {
+    return blob
+  }
+
+  const plaintext = await decryptPlatformEnvelope(envelope)
+  const prettyJson = formatJsonForDownload(plaintext)
+
+  return new Blob([prettyJson], {
+    type: 'application/json',
+  })
+}
+
+async function decryptPlatformEnvelope(envelope: Record<string, unknown> | null) {
+  const projectPublicCode = readString(envelope?.projectPublicCode)
+  const dataset = asRecord(envelope?.dataset)
+  const encryption = asRecord(envelope?.encryption)
+  const cipher = asRecord(envelope?.cipher)
+  const algorithm = readString(encryption?.algorithm)
+  const ciphertextBase64 = readString(cipher?.ciphertextBase64)
+  const keyId = readString(encryption?.keyId)
+  const nonceBase64 = readString(encryption?.nonceBase64)
+  const privacyPolicyHash = readString(encryption?.privacyPolicyHash)
+  const plaintextSha256 = readString(dataset?.plaintextSha256)
+
+  if (!projectPublicCode || !algorithm || !ciphertextBase64 || !keyId || !nonceBase64) {
+    throw new Error('The platform_encryption_v1 envelope is missing decryption metadata.')
+  }
+
+  const platformKeyHex = await derivePlatformEncryptionKeyHex({
+    encryptionKeyId: keyId,
+    privacyPolicyHash,
+    projectPublicCode,
+  })
+  const ciphertext = base64ToBytes(ciphertextBase64)
+  const nonce = base64ToBytes(nonceBase64)
+  const plaintextBytes = algorithm === 'AES-GCM'
+    ? await decryptAesGcm({ ciphertext, nonce, platformKeyHex })
+    : await xorWithSha256KeyStream({ input: ciphertext, nonce, platformKeyHex })
+  const plaintext = utf8Decode(plaintextBytes)
+
+  if (plaintextSha256) {
+    const actualHash = await sha256Hex(plaintext)
+
+    if (actualHash !== plaintextSha256) {
+      throw new Error('Downloaded dataset failed platform_encryption_v1 integrity verification.')
+    }
+  }
+
+  return plaintext
+}
+
+async function decryptAesGcm({
+  ciphertext,
+  nonce,
+  platformKeyHex,
+}: {
+  ciphertext: Uint8Array
+  nonce: Uint8Array
+  platformKeyHex: string
+}) {
+  const subtle = globalThis.crypto?.subtle
+
+  if (!subtle) {
+    throw new Error('This browser cannot decrypt AES-GCM platform_encryption_v1 datasets.')
+  }
+
+  const key = await subtle.importKey('raw', toArrayBuffer(hexToBytes(platformKeyHex)), { name: 'AES-GCM' }, false, ['decrypt'])
+  const plaintext = await subtle.decrypt({ iv: toArrayBuffer(nonce), name: 'AES-GCM' }, key, toArrayBuffer(ciphertext))
+
+  return new Uint8Array(plaintext)
+}
+
+async function derivePlatformEncryptionKeyHex({
+  encryptionKeyId,
+  privacyPolicyHash,
+  projectPublicCode,
+}: {
+  encryptionKeyId: string
+  privacyPolicyHash: string | null
+  projectPublicCode: string
+}) {
+  return sha256Hex(
+    ['modi', 'platform_encryption_v1', encryptionKeyId, projectPublicCode, privacyPolicyHash ?? 'no-policy'].join(':'),
+  )
+}
+
+async function xorWithSha256KeyStream({
+  input,
+  nonce,
+  platformKeyHex,
+}: {
+  input: Uint8Array
+  nonce: Uint8Array
+  platformKeyHex: string
+}) {
+  const output = new Uint8Array(input.length)
+  const nonceBase64 = bytesToBase64(nonce)
+  let offset = 0
+  let counter = 0
+
+  while (offset < input.length) {
+    const block = hexToBytes(await sha256Hex(`${platformKeyHex}:${nonceBase64}:${counter}`))
+
+    for (let index = 0; index < block.length && offset < input.length; index += 1) {
+      output[offset] = input[offset] ^ block[index]
+      offset += 1
+    }
+
+    counter += 1
+  }
+
+  return output
+}
+
 function readWalrusAggregatorUrl() {
   const value = import.meta.env.VITE_WALRUS_AGGREGATOR_URL?.trim()
   return value && /^https?:\/\//.test(value) ? value : DEFAULT_WALRUS_AGGREGATOR_URL
@@ -163,4 +283,106 @@ function wait(ms: number) {
   return new Promise<void>((resolve) => {
     window.setTimeout(resolve, ms)
   })
+}
+
+function parseJsonRecord(value: string) {
+  try {
+    return asRecord(JSON.parse(value))
+  } catch {
+    return null
+  }
+}
+
+function asRecord(value: unknown) {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null
+}
+
+function readString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function formatJsonForDownload(value: string) {
+  try {
+    return `${JSON.stringify(JSON.parse(value), null, 2)}\n`
+  } catch {
+    return value
+  }
+}
+
+async function sha256Hex(value: string) {
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', utf8Encode(value))
+  return bytesToHex(new Uint8Array(digest))
+}
+
+function base64ToBytes(value: string) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  const cleanValue = value.replace(/=+$/g, '')
+  const bytes: number[] = []
+  let buffer = 0
+  let bits = 0
+
+  for (const char of cleanValue) {
+    const index = chars.indexOf(char)
+
+    if (index === -1) {
+      continue
+    }
+
+    buffer = (buffer << 6) | index
+    bits += 6
+
+    if (bits >= 8) {
+      bits -= 8
+      bytes.push((buffer >> bits) & 255)
+    }
+  }
+
+  return new Uint8Array(bytes)
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  let result = ''
+  let index = 0
+
+  for (; index + 2 < bytes.length; index += 3) {
+    const chunk = (bytes[index] << 16) | (bytes[index + 1] << 8) | bytes[index + 2]
+    result += chars[(chunk >> 18) & 63] + chars[(chunk >> 12) & 63] + chars[(chunk >> 6) & 63] + chars[chunk & 63]
+  }
+
+  if (index < bytes.length) {
+    const remaining = bytes.length - index
+    const chunk = (bytes[index] << 16) | (remaining === 2 ? bytes[index + 1] << 8 : 0)
+    result += chars[(chunk >> 18) & 63] + chars[(chunk >> 12) & 63] + (remaining === 2 ? chars[(chunk >> 6) & 63] : '=') + '='
+  }
+
+  return result
+}
+
+function bytesToHex(bytes: Uint8Array) {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function hexToBytes(hex: string) {
+  const bytes = new Uint8Array(hex.length / 2)
+
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16)
+  }
+
+  return bytes
+}
+
+function toArrayBuffer(bytes: Uint8Array) {
+  const buffer = new ArrayBuffer(bytes.byteLength)
+  new Uint8Array(buffer).set(bytes)
+  return buffer
+}
+
+function utf8Encode(value: string) {
+  return new TextEncoder().encode(value)
+}
+
+function utf8Decode(value: Uint8Array) {
+  return new TextDecoder().decode(value)
 }

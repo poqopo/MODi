@@ -375,6 +375,7 @@ function readOptionalText(value: unknown) {
 
 function readEncryptionProvider(value: unknown) {
   const text = readOptionalText(value)
+  if (text === 'platform') return 'platform'
   return text === 'client_aes_gcm' ? 'client_aes_gcm' : 'seal'
 }
 

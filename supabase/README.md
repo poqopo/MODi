@@ -12,8 +12,8 @@
 | `project_age_ranges`, `project_data_fields` | 연구 참여 조건과 요청 데이터 스키마입니다. |
 | `study_applications` | 사용자 앱에서 들어온 참여 신청, 승인/거절/참여 상태입니다. |
 | `consent_grants` | 사용자 동의 범위와 만료/철회 상태입니다. |
-| `participant_submissions` | 사용자가 제출한 데이터 기록입니다. Walrus blob, manifest hash, Seal policy id 연결 지점입니다. |
-| `access_grants` | 기관이 Walrus/Seal 데이터에 접근할 수 있는 권한 이력입니다. |
+| `participant_submissions` | 사용자가 제출한 데이터 기록입니다. Walrus blob, manifest hash, platform encryption metadata 연결 지점입니다. |
+| `access_grants` | 기관이 Walrus/Seal 데이터에 접근할 수 있는 권한 이력입니다. Seal은 roadmap 기준입니다. |
 | `reward_settlements` | 보상 정산 상태, Sui transaction hash/url입니다. |
 | `audit_events` | 주요 변경/접근 이벤트의 감사 로그입니다. |
 
@@ -132,7 +132,7 @@ Expo Go는 커스텀 URL scheme을 안정적으로 테스트할 수 없으므로
 
 ## 사용자 데이터 제출 흐름
 
-사용자 앱의 `submitParticipantData`는 먼저 기기 안에서 연구 범위의 가명 payload를 만듭니다. `verify-participant-payload` Edge Function은 Walrus 업로드를 하지 않고 payload를 수정하지도 않으며, user-app 가명처리 결과에 직접 식별자, 정확한 날짜/타임스탬프, 지갑 주소/연락처 패턴이 남아 있는지만 검증하고 receipt hash를 돌려줍니다. 검증에서 문제가 나오면 user-app이 payload를 한 번 더 안전화하고 재검증합니다. 검증을 통과하면 user-app은 payload를 Seal SDK encrypted dataset envelope로 암호화해 Walrus publisher에 업로드한 뒤 `submit-participant-data` Edge Function을 호출합니다. `submit-participant-data`는 서버 키로 모집중인 연구를 확인한 뒤 `study_applications`의 신청자/참여자 레코드를 만들거나 누적 제출량을 갱신하고, `participant_submissions`에 encrypted dataset Walrus blob id, encrypted dataset hash, Privacy Agent receipt hash, Seal identity, encryption provider/mode를 함께 저장합니다.
+사용자 앱의 `submitParticipantData`는 먼저 기기 안에서 연구 범위의 가명 payload를 만듭니다. `verify-participant-payload` Edge Function은 Walrus 업로드를 하지 않고 payload를 수정하지도 않으며, user-app 가명처리 결과에 직접 식별자, 정확한 날짜/타임스탬프, 지갑 주소/연락처 패턴이 남아 있는지만 검증하고 receipt hash를 돌려줍니다. 검증에서 문제가 나오면 user-app이 payload를 한 번 더 안전화하고 재검증합니다. 검증을 통과하면 user-app은 payload를 `platform_encryption_v1` encrypted dataset envelope로 감싸 Walrus publisher에 업로드한 뒤 `submit-participant-data` Edge Function을 호출합니다. `submit-participant-data`는 서버 키로 모집중인 연구를 확인한 뒤 `study_applications`의 신청자/참여자 레코드를 만들거나 누적 제출량을 갱신하고, `participant_submissions`에 encrypted dataset Walrus blob id, encrypted dataset hash, Privacy Agent receipt hash, encryption provider/mode를 함께 저장합니다.
 
 앱에서 기본으로 쓰는 Walrus publisher는 testnet public publisher이며 제출 blob은 기본 5 epoch 동안 저장합니다. 필요하면 사용자 앱 `.env`에 `EXPO_PUBLIC_WALRUS_PUBLISHER_URL`과 `EXPO_PUBLIC_WALRUS_EPOCHS`를 넣어 바꿀 수 있습니다.
 기관 대시보드의 데이터 관리는 `participant_submissions.walrus_blob_id`로 Walrus aggregator에서 참가자 제출 payload blob을 내려받고, 저장된 manifest hash와 비교해 검증합니다. 필요하면 `VITE_WALRUS_AGGREGATOR_URL`을 설정합니다.
@@ -141,5 +141,5 @@ Expo Go는 커스텀 URL scheme을 안정적으로 테스트할 수 없으므로
 
 - 모든 public 테이블은 Row Level Security를 켜둔 상태입니다.
 - 웹/모바일 클라이언트에는 publishable key만 넣습니다.
-- Walrus에 저장되는 민감 가능 데이터는 업로드 전에 user-app에서 Seal SDK 암호화를 거친다는 전제로 설계했습니다.
-- Supabase에는 원본 건강 데이터가 아니라 상태, 권한, 제출 메타데이터, Walrus/Seal 참조를 저장하는 것을 기본 원칙으로 합니다.
+- Walrus에 저장되는 민감 가능 데이터는 업로드 전에 user-app에서 `platform_encryption_v1` envelope로 암호화한다는 전제로 설계했습니다.
+- Supabase에는 원본 건강 데이터가 아니라 상태, 권한, 제출 메타데이터, Walrus/platform encryption 참조를 저장하는 것을 기본 원칙으로 합니다.
